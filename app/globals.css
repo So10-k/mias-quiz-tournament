@@ -1,0 +1,144 @@
+@import url("https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Quicksand:wght@500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* sunny day palette */
+  --sky-1: #B7E5FF;
+  --sky-2: #87CEEB;
+  --sky-3: #5BA8D9;
+  --sun: #FFD93D;
+  --sun-deep: #F4A93A;
+  --cloud: #FFFFFF;
+  --grass: #7DD87D;
+  --grass-deep: #4FB04F;
+  --coral: #FF6B9D;
+  --coral-deep: #E94B7E;
+  --berry: #B23A8E;
+  --navy: #1B2A4E;
+  --navy-soft: #3B4A7E;
+  --gold: #C8A04C;
+
+  --shadow-pop: 4px 4px 0 0 var(--navy);
+  --shadow-pop-lg: 8px 8px 0 0 var(--navy);
+  --shadow-pop-sm: 2px 2px 0 0 var(--navy);
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: "Quicksand", system-ui, sans-serif;
+  font-weight: 600;
+  color: var(--navy);
+  /* solid fallback colour; the SkyBackground component paints the actual
+     gradient inside its own stacking context so clouds/sun/hill aren't
+     hidden behind the body bg (a fixed -z-10 element renders BEHIND the
+     body's background-image in most browsers). */
+  background: var(--sky-2);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Picture-book friendly headings */
+.font-display { font-family: "Fredoka", "Quicksand", system-ui, sans-serif; font-weight: 700; }
+.font-body    { font-family: "Quicksand", system-ui, sans-serif; font-weight: 600; }
+
+/* Big rounded card with thick border + offset shadow = "3D" pop */
+.card {
+  background: var(--cloud);
+  border: 4px solid var(--navy);
+  border-radius: 24px;
+  box-shadow: var(--shadow-pop-lg);
+}
+.card-sm {
+  background: var(--cloud);
+  border: 3px solid var(--navy);
+  border-radius: 18px;
+  box-shadow: var(--shadow-pop);
+}
+
+/* Big tappable button */
+.pop {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: var(--cloud);
+  color: var(--navy);
+  border: 3px solid var(--navy);
+  border-radius: 14px;
+  box-shadow: var(--shadow-pop);
+  font-family: "Fredoka", system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 18px;
+  transition: transform 80ms ease, box-shadow 80ms ease, background-color 80ms ease;
+  cursor: pointer;
+  text-decoration: none;
+  user-select: none;
+}
+.pop:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 0 var(--navy); }
+.pop:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 0 var(--navy); }
+.pop:disabled { opacity: 0.55; cursor: not-allowed; transform: none; box-shadow: var(--shadow-pop); }
+
+.pop-yellow { background: var(--sun); }
+.pop-yellow:hover { background: #FFE066; }
+.pop-coral { background: var(--coral); color: white; }
+.pop-coral:hover { background: var(--coral-deep); }
+.pop-grass { background: var(--grass); color: white; }
+.pop-grass:hover { background: var(--grass-deep); }
+.pop-sky { background: var(--sky-2); color: white; }
+.pop-sky:hover { background: var(--sky-3); }
+.pop-white { background: white; }
+.pop-danger { background: var(--coral-deep); color: white; border-color: var(--berry); }
+
+/* Bouncy press animation for primary CTAs */
+@keyframes bob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-3px); }
+}
+.bob { animation: bob 2.4s ease-in-out infinite; }
+
+/* Floating clouds */
+@keyframes drift {
+  0%   { transform: translateX(-5vw); }
+  100% { transform: translateX(105vw); }
+}
+.drift-slow  { animation: drift 90s linear infinite; }
+.drift-mid   { animation: drift 60s linear infinite; }
+.drift-fast  { animation: drift 40s linear infinite; }
+
+/* Sun gentle rotate */
+@keyframes spin-slow { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+.spin-slow { animation: spin-slow 60s linear infinite; transform-origin: center; }
+
+/* Selection */
+::selection { background: var(--coral); color: white; }
+
+/* Inputs — friendly chunky */
+input[type="text"], input[type="email"], input[type="datetime-local"], textarea, select {
+  font-family: "Quicksand", system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 18px;
+  background: white;
+  border: 3px solid var(--navy);
+  border-radius: 12px;
+  padding: 10px 14px;
+  color: var(--navy);
+  outline: none;
+  box-shadow: var(--shadow-pop-sm);
+}
+input[type="text"]:focus, input[type="email"]:focus, input[type="datetime-local"]:focus, textarea:focus {
+  border-color: var(--coral);
+  box-shadow: 3px 3px 0 0 var(--coral);
+}
+
+/* Hide scrollbar visually for full-stage pages while still scrollable when content overflows */
+.no-scrollbars::-webkit-scrollbar { display: none; }
+.no-scrollbars { -ms-overflow-style: none; scrollbar-width: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bob, .drift-slow, .drift-mid, .drift-fast, .spin-slow { animation: none !important; }
+  *, *::before, *::after { transition-duration: 0.01ms !important; }
+}
