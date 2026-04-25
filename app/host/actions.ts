@@ -211,12 +211,15 @@ export async function addRound(formData: FormData) {
     redirect("/host?error=Add+at+least+one+question");
   }
 
+  const isPractice = String(formData.get("isPractice") ?? "") === "yes";
+
   await createRound({
     tournamentId: t.id,
     title,
     introProse: intro || undefined,
     passThreshold: threshold,
     closesAt: null,
+    isPractice,
     questions: parsedQs.map((q) => ({
       prompt: q.prompt,
       questionType: "multiple_choice",
@@ -228,7 +231,11 @@ export async function addRound(formData: FormData) {
   });
 
   bumpAll();
-  redirect("/host?ok=Round+saved");
+  redirect(
+    isPractice
+      ? "/host?ok=Practice+round+saved+%E2%80%94+players+can+try+it+now"
+      : "/host?ok=Round+saved"
+  );
 }
 
 export async function removeReaderAction(formData: FormData) {

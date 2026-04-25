@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Stage } from "@/components/Stage";
+import { MeetMiaPlayer } from "@/components/MeetMiaPlayer";
 import { AUTHOR_NAME, AUTHOR_AGE } from "@/lib/author";
 import { getActiveTournament, getLatestTournament, getCast } from "@/lib/engine";
 import { db, schema } from "@/db";
@@ -116,6 +117,9 @@ export default async function Home() {
           </div>
 
           <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
+            {!latest || latest.status === "registration" ? (
+              <MeetMiaPlayer src="/videos/mia-intro.mp4" />
+            ) : null}
             <Link href="/players" className="pop pop-sky">
               👥 Players
             </Link>

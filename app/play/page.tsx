@@ -43,12 +43,16 @@ export default async function PlayHome() {
     enrollment = await enroll(user.id, tournament.id);
   }
 
-  const rounds = await getRoundsForTournament(tournament.id);
+  const allRounds = await getRoundsForTournament(tournament.id);
+  const rounds = allRounds.filter((r) => !r.isPractice);
+  const practiceRounds = allRounds.filter(
+    (r) => r.isPractice && r.status !== "closed"
+  );
   const attempts = new Map<
     string,
     { passed: boolean | null; submittedAt: Date | null; score: string | null }
   >();
-  for (const r of rounds) {
+  for (const r of allRounds) {
     const a = await getAttempt(user.id, r.id);
     if (a)
       attempts.set(r.id, {
@@ -148,6 +152,48 @@ export default async function PlayHome() {
             </p>
           </div>
         )}
+
+        {/* Practice rounds — don't count, available to everyone */}
+        {practiceRounds.length > 0 ? (
+          <div className="card-sm px-5 py-5 w-full bg-sky1">
+            <div className="flex items-baseline justify-between gap-3 mb-3">
+              <h3 className="font-display text-xl text-navy">
+                🎯 Practice rounds
+              </h3>
+              <span className="font-body text-xs text-navy-soft">
+                Just for fun — doesn&rsquo;t count
+              </span>
+            </div>
+            <ul className="flex flex-col gap-2">
+              {practiceRounds.map((r) => {
+                const a = attempts.get(r.id);
+                const pct = a?.score ? Math.round(Number(a.score) * 100) : null;
+                const done = !!a?.submittedAt;
+                return (
+                  <li
+                    key={r.id}
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg border-3 border-navy bg-white"
+                  >
+                    <span className="font-display text-base text-navy flex-1 truncate">
+                      {r.title}
+                    </span>
+                    {done ? (
+                      <span className="font-display text-sm text-grass-deep">
+                        ✓ {pct}%
+                      </span>
+                    ) : null}
+                    <Link
+                      href={`/play/practice/${r.id}`}
+                      className="pop pop-yellow text-xs px-3 py-1"
+                    >
+                      {done ? "review" : "try it"}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ) : null}
 
         {/* Past rounds */}
         {closedRounds.length > 0 ? (

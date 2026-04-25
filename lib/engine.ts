@@ -190,7 +190,7 @@ export async function submitAttempt({ userId, roundId, picks }: SubmitInput) {
   const round = await getRoundWithQuestions(roundId);
   if (!round) throw new Error("Round not found");
   if (round.round.status !== "active") {
-    throw new Error("This chapter is not open.");
+    throw new Error("This round is not open.");
   }
 
   // Idempotent: if an attempt exists, return it.
@@ -199,11 +199,16 @@ export async function submitAttempt({ userId, roundId, picks }: SubmitInput) {
     return existing;
   }
 
-  // Verify enrollment & not eliminated.
-  const enrollment = await getEnrollment(userId, round.round.tournamentId);
-  if (!enrollment) throw new Error("Not enrolled in this tournament.");
-  if (enrollment.eliminatedAt) {
-    throw new Error("This reader has been eliminated.");
+  const isPractice = round.round.isPractice === true;
+
+  // For real rounds we require enrollment and not-eliminated. Practice
+  // rounds skip both — anyone signed in can take them.
+  let enrollment = await getEnrollment(userId, round.round.tournamentId);
+  if (!isPractice) {
+    if (!enrollment) throw new Error("Not enrolled in this tournament.");
+    if (enrollment.eliminatedAt) {
+      throw new Error("This player has been eliminated.");
+    }
   }
 
   let total = 0;
@@ -255,9 +260,11 @@ export async function submitAttempt({ userId, roundId, picks }: SubmitInput) {
     .values(answerInserts.map((a) => ({ ...a, attemptId })))
     .onConflictDoNothing();
 
-  // Strike if failed.
+  // Strike + elimination logic — REAL rounds only. Practice attempts are
+  // recorded for the player's own review but never give strikes, never
+  // eliminate, and never feed the bracket.
   let nowEliminated = false;
-  if (!passed) {
+  if (!isPractice && !passed && enrollment) {
     await db.insert(strikes).values({
       id: makeId(),
       enrollmentId: enrollment.id,
@@ -276,7 +283,7 @@ export async function submitAttempt({ userId, roundId, picks }: SubmitInput) {
     nowEliminated = !!updated?.eliminatedAt;
   }
 
-  return { id: attemptId, score, passed, eliminated: nowEliminated };
+  return { id: attemptId, score, passed, eliminated: nowEliminated, isPractice };
 }
 
 // ─── close round + eliminations ─────────────────────────────────────────────
@@ -292,6 +299,15 @@ export async function closeRound(roundId: string) {
     .limit(1);
   if (!round) throw new Error("Round not found");
   if (round.status === "closed") return;
+  // Practice rounds aren't part of the tournament loop — closing them just
+  // flips the status without strikes or eliminations.
+  if (round.isPractice) {
+    await db
+      .update(rounds)
+      .set({ status: "closed" })
+      .where(eq(rounds.id, roundId));
+    return;
+  }
 
   // Active enrollments for the tournament.
   const active = await db
@@ -416,21 +432,23 @@ export async function closeCurrentRound(tournamentId: string) {
     .from(rounds)
     .where(eq(rounds.tournamentId, tournamentId))
     .orderBy(asc(rounds.chapterNumber));
-  const active = all.find((r) => r.status === "active");
+  // Only the real (non-practice) active round counts for this control.
+  const active = all.find((r) => r.status === "active" && !r.isPractice);
   if (active) {
     await closeRound(active.id);
   }
 }
 
-// Promote the next-in-line draft round to active. Idempotent.
+// Promote the next-in-line REAL draft round to active. Idempotent.
+// Practice rounds are skipped here — they live outside the tournament loop.
 export async function startNextRound(tournamentId: string) {
   const all = await db
     .select()
     .from(rounds)
     .where(eq(rounds.tournamentId, tournamentId))
     .orderBy(asc(rounds.chapterNumber));
-  if (all.some((r) => r.status === "active")) return; // one at a time
-  const next = all.find((r) => r.status === "draft");
+  if (all.some((r) => r.status === "active" && !r.isPractice)) return; // one at a time
+  const next = all.find((r) => r.status === "draft" && !r.isPractice);
   if (!next) {
     throw new Error("No round drafted yet. Write one first.");
   }
@@ -559,6 +577,7 @@ type CreateRoundInput = {
   introProse?: string;
   passThreshold?: number;
   closesAt?: Date | null;
+  isPractice?: boolean;
   questions: Array<{
     prompt: string;
     questionType: "multiple_choice" | "true_false";
@@ -567,14 +586,23 @@ type CreateRoundInput = {
 };
 
 export async function createRound(input: CreateRoundInput) {
-  const allRounds = await db
+  const isPractice = !!input.isPractice;
+  // chapterNumber counters are SEPARATE for practice and real rounds, so
+  // bracket round-index mapping (which uses chapterNumber on real rounds)
+  // doesn't collide with practice numbering.
+  const sameKind = await db
     .select()
     .from(rounds)
-    .where(eq(rounds.tournamentId, input.tournamentId));
+    .where(
+      and(
+        eq(rounds.tournamentId, input.tournamentId),
+        eq(rounds.isPractice, isPractice)
+      )
+    );
   const nextNumber =
-    allRounds.length === 0
+    sameKind.length === 0
       ? 1
-      : Math.max(...allRounds.map((r) => r.chapterNumber)) + 1;
+      : Math.max(...sameKind.map((r) => r.chapterNumber)) + 1;
 
   const roundId = makeId();
   await db.insert(rounds).values({
@@ -584,7 +612,11 @@ export async function createRound(input: CreateRoundInput) {
     title: input.title,
     introProse: input.introProse ?? null,
     passThreshold: (input.passThreshold ?? 0.6).toFixed(2),
-    status: "draft",
+    // Practice rounds open immediately; real rounds wait for the host to
+    // press "Start Round N".
+    status: isPractice ? "active" : "draft",
+    isPractice,
+    opensAt: isPractice ? new Date() : null,
     closesAt: input.closesAt ?? null,
   });
 

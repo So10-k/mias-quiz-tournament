@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Stage } from "@/components/Stage";
 import { ChapterEditor } from "@/components/ChapterEditor";
+import { AnnouncementForm } from "@/components/AnnouncementForm";
 import { BracketView } from "@/components/BracketView";
 import { currentUser } from "@/lib/session";
 import {
@@ -48,7 +49,12 @@ export default async function HostPanel({
   const { error, ok } = await searchParams;
 
   const tournament = await getOrCreateActiveTournament();
-  const rounds = await getRoundsForTournament(tournament.id);
+  const allRounds = await getRoundsForTournament(tournament.id);
+  // Real-round controls (start/close/etc.) only see real rounds. Practice
+  // rounds are listed in their own section so they're never confused with
+  // tournament rounds.
+  const rounds = allRounds.filter((r) => !r.isPractice);
+  const practiceRounds = allRounds.filter((r) => r.isPractice);
   const cast = await getCast(tournament.id);
   const bracket = await getBracket(tournament.id);
   const bracketUsers = await getBracketUsers(tournament.id);
@@ -318,6 +324,27 @@ export default async function HostPanel({
           ) : null}
         </section>
 
+        {/* Announcements */}
+        <section className="card px-5 py-5">
+          <div className="flex items-baseline justify-between gap-3 flex-wrap">
+            <h2 className="font-display text-2xl text-navy">
+              📣 Send an announcement
+            </h2>
+            <span className="font-body text-xs text-navy-soft">
+              Email everyone who&rsquo;s signed up
+            </span>
+          </div>
+          <p className="font-body text-sm text-navy-soft mt-1">
+            Pick an audience, write a quick note, review, then send. The email
+            goes out from{" "}
+            <strong>Mia&rsquo;s Quiz Tournament</strong> with the same sunny
+            styling as the magic-link emails.
+          </p>
+          <div className="mt-3">
+            <AnnouncementForm />
+          </div>
+        </section>
+
         {/* Cover line */}
         <section className="card px-5 py-5">
           <h2 className="font-display text-2xl text-navy">✍️ Cover line</h2>
@@ -402,6 +429,56 @@ export default async function HostPanel({
               when you&rsquo;re ready to release it.
             </p>
           ) : null}
+        </section>
+
+        {/* Practice rounds */}
+        <section className="card px-5 py-5">
+          <h2 className="font-display text-2xl text-navy">🎯 Practice rounds</h2>
+          <p className="font-body text-sm text-navy-soft mt-1">
+            Always-open warm-ups. They never give strikes or feed the bracket.
+          </p>
+          {practiceRounds.length === 0 ? (
+            <p className="font-body text-base text-navy-soft mt-3">
+              None yet. Toggle <strong>Practice round</strong> in the editor
+              below to make one.
+            </p>
+          ) : (
+            <ul className="mt-3 flex flex-col gap-2">
+              {practiceRounds.map((r) => (
+                <li
+                  key={r.id}
+                  className="flex items-center gap-3 px-3 py-2 rounded-lg border-3 border-navy bg-sky1 shadow-pop-sm"
+                >
+                  <span className="font-display text-lg text-navy w-24">
+                    Practice {r.chapterNumber}
+                  </span>
+                  <span className="font-display text-lg text-navy flex-1 truncate">
+                    {r.title}
+                  </span>
+                  <span
+                    className={
+                      "font-display text-sm px-2 py-1 rounded-md border-2 border-navy " +
+                      (r.status === "active"
+                        ? "bg-grass text-white"
+                        : "bg-navy text-white")
+                    }
+                  >
+                    {r.status}
+                  </span>
+                  <form action={deleteDraftRound}>
+                    <input type="hidden" name="roundId" value={r.id} />
+                    <button
+                      type="submit"
+                      className="font-display text-sm text-coral-deep hover:underline"
+                      title="Only draft practice rounds can be deleted; active ones aren't deletable here for safety"
+                    >
+                      delete (drafts only)
+                    </button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
 
         {/* Write a round */}

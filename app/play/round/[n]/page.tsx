@@ -41,7 +41,8 @@ export default async function ChapterPage({
     .where(
       and(
         eq(schema.rounds.tournamentId, tournament.id),
-        eq(schema.rounds.chapterNumber, chapterNumber)
+        eq(schema.rounds.chapterNumber, chapterNumber),
+        eq(schema.rounds.isPractice, false)
       )
     )
     .limit(1);

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { submitChapter } from "@/app/play/round/[n]/actions";
+import { submitPractice } from "@/app/play/practice/[id]/actions";
 
 type Option = { id: string; label: string; isCorrect: boolean };
 type Question = { id: string; prompt: string; options: Option[] };
@@ -12,6 +13,9 @@ type Props = {
   title: string;
   intro?: string | null;
   questions: Question[];
+  // For practice rounds: provide the round ID and switch the submit path.
+  mode?: "real" | "practice";
+  roundId?: string;
 };
 
 const palette = ["pop-coral", "pop-yellow", "pop-grass", "pop-sky"];
@@ -22,6 +26,8 @@ export function ChapterRunner({
   title,
   intro,
   questions,
+  mode = "real",
+  roundId,
 }: Props) {
   // -1 = intro page, 0..n-1 = questions, n = ready-to-submit confirmation
   const [page, setPage] = useState<number>(intro ? -1 : 0);
@@ -35,11 +41,17 @@ export function ChapterRunner({
     if (!allAnswered || submitting) return;
     setSubmitting(true);
     const fd = new FormData();
-    fd.set("chapter", String(chapterNumber));
-    fd.set("tournamentId", tournamentId);
     for (const [qid, oid] of Object.entries(picks)) fd.set(`q:${qid}`, oid);
     try {
-      await submitChapter(fd);
+      if (mode === "practice") {
+        if (!roundId) throw new Error("missing roundId");
+        fd.set("roundId", roundId);
+        await submitPractice(fd);
+      } else {
+        fd.set("chapter", String(chapterNumber));
+        fd.set("tournamentId", tournamentId);
+        await submitChapter(fd);
+      }
     } catch {
       setSubmitting(false);
     }

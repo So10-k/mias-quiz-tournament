@@ -34,6 +34,7 @@ export function ChapterEditor() {
   const [intro, setIntro] = useState("");
   const [threshold, setThreshold] = useState(60);
   const [closesAt, setClosesAt] = useState("");
+  const [isPractice, setIsPractice] = useState(false);
   const [questions, setQuestions] = useState<Q[]>([blankQuestion()]);
 
   const updateQ = (i: number, patch: Partial<Q>) => {
@@ -44,6 +45,27 @@ export function ChapterEditor() {
 
   return (
     <form action={addRound} className="flex flex-col gap-5">
+      <input type="hidden" name="isPractice" value={isPractice ? "yes" : ""} />
+      <label
+        className={
+          "flex items-center gap-3 px-4 py-3 border-3 border-navy rounded-xl shadow-pop-sm cursor-pointer " +
+          (isPractice ? "bg-sky1" : "bg-white")
+        }
+      >
+        <input
+          type="checkbox"
+          checked={isPractice}
+          onChange={(e) => setIsPractice(e.target.checked)}
+          className="w-5 h-5"
+        />
+        <span className="font-display text-lg text-navy flex-1">
+          🎯 Practice round (doesn&rsquo;t count)
+        </span>
+        <span className="font-body text-xs text-navy-soft">
+          Always open · no strikes · skips the bracket
+        </span>
+      </label>
+
       <label className="flex flex-col gap-2">
         <span className="font-display text-xl text-navy">Round title</span>
         <input

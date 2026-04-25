@@ -22,6 +22,7 @@ type Props = {
   reveal: "passed" | "struck" | "eliminated" | null;
   livesLeft: number;
   strikeLimit: number;
+  isPractice?: boolean;
 };
 
 export function ChapterReview({
@@ -34,6 +35,7 @@ export function ChapterReview({
   reveal,
   livesLeft,
   strikeLimit,
+  isPractice = false,
 }: Props) {
   const [showReview, setShowReview] = useState(false);
   const correct = questions.filter((q) => q.myWasCorrect).length;
@@ -46,7 +48,9 @@ export function ChapterReview({
         transition={{ duration: 0.32 }}
         className="card px-7 py-7 text-center"
       >
-        {reveal === "eliminated" || (!passed && livesLeft <= 0) ? (
+        {isPractice ? (
+          <PracticeBadge passed={passed} />
+        ) : reveal === "eliminated" || (!passed && livesLeft <= 0) ? (
           <EliminatedBadge />
         ) : reveal === "struck" || !passed ? (
           <StrikeBadge livesLeft={livesLeft} strikeLimit={strikeLimit} />
@@ -55,7 +59,7 @@ export function ChapterReview({
         )}
 
         <p className="font-display text-base text-navy-soft uppercase tracking-wider mt-5">
-          Round {chapterNumber}
+          {isPractice ? `Practice ${chapterNumber}` : `Round ${chapterNumber}`}
         </p>
         <h1 className="font-display text-3xl md:text-4xl text-navy mt-1">
           {title}
@@ -171,6 +175,23 @@ function StrikeBadge({
       <span className="text-5xl">🙈</span>
       <span className="font-display text-base text-navy mt-1">
         {livesLeft} of {strikeLimit} ❤️
+      </span>
+    </motion.div>
+  );
+}
+
+function PracticeBadge({ passed }: { passed: boolean }) {
+  return (
+    <motion.div
+      initial={{ scale: 0.9 }}
+      animate={{ scale: 1 }}
+      transition={{ type: "spring", stiffness: 220, damping: 14 }}
+      className="inline-flex flex-col items-center justify-center w-40 h-40 mx-auto rounded-full border-4 border-navy bg-sky2 shadow-pop-lg text-white"
+    >
+      <span className="text-5xl">{passed ? "🎯" : "🙂"}</span>
+      <span className="font-display text-base mt-1">Practice!</span>
+      <span className="font-body text-xs px-2 mt-1 text-center">
+        Doesn&rsquo;t count toward lives
       </span>
     </motion.div>
   );

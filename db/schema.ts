@@ -168,6 +168,9 @@ export const rounds = pgTable("rounds", {
     .notNull()
     .default("0.6"),
   status: roundStatus("status").notNull().default("draft"),
+  // Practice rounds let players try the format before the tournament begins.
+  // They never give strikes, never feed the bracket, and stay open.
+  isPractice: boolean("is_practice").notNull().default(false),
   opensAt: timestamp("opens_at", { mode: "date" }),
   closesAt: timestamp("closes_at", { mode: "date" }),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),

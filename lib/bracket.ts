@@ -301,7 +301,8 @@ export async function autoResolveByScore(
     .where(
       and(
         eq(rounds.tournamentId, tournamentId),
-        eq(rounds.chapterNumber, roundIndex)
+        eq(rounds.chapterNumber, roundIndex),
+        eq(rounds.isPractice, false)
       )
     )
     .limit(1);
