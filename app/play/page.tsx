@@ -46,7 +46,8 @@ export default async function PlayHome() {
   const allRounds = await getRoundsForTournament(tournament.id);
   const rounds = allRounds.filter((r) => !r.isPractice);
   const practiceRounds = allRounds.filter(
-    (r) => r.isPractice && r.status !== "closed"
+    (r) =>
+      r.isPractice && r.status !== "closed" && !r.tiebreakerMatchupId
   );
   const attempts = new Map<
     string,

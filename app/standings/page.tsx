@@ -2,6 +2,9 @@ import Link from "next/link";
 import { Stage } from "@/components/Stage";
 import { Crown } from "@/components/ink/Crown";
 import { PageLockedNotice } from "@/components/PageLockedNotice";
+import { ArcadeStage } from "@/components/arcade/Stage";
+import { ArcadeTitle } from "@/components/arcade/Title";
+import { ArcadeStandings } from "@/components/arcade/ArcadeStandings";
 import { AUTHOR_NAME, PRIZE } from "@/lib/author";
 import {
   getActiveTournament,
@@ -9,6 +12,7 @@ import {
   getCast,
 } from "@/lib/engine";
 import { isPageLocked } from "@/lib/page-locks";
+import { getSiteTheme } from "@/lib/site-theme";
 import { currentUser } from "@/lib/session";
 import { db, schema } from "@/db";
 import { eq, asc, inArray } from "drizzle-orm";
@@ -91,6 +95,36 @@ export default async function StandingsPage() {
   if (t.status === "complete" && t.winnerUserId) {
     const w = ranked.find((r) => r.user.id === t.winnerUserId);
     winnerName = w?.user.name ?? w?.user.email ?? null;
+  }
+
+  const theme = await getSiteTheme();
+  if (theme === "arcade") {
+    const limit = t.strikeLimit ?? 2;
+    const rows = ranked.map((r) => ({
+      id: r.enrollment.id,
+      name: r.user.name,
+      email: r.user.email,
+      score: Math.round(r.total * 100) / 100,
+      hearts: Math.max(0, limit - r.enrollment.strikeCount),
+      isOut: !!r.enrollment.eliminatedAt,
+      isYou: me?.id === r.user.id,
+    }));
+    return (
+      <ArcadeStage scrollable>
+        <ArcadeTitle
+          eyebrow={t.status === "complete" ? "Final Results" : "Live Leaderboard"}
+          title="Standings"
+          subtitle={`Prize: ${PRIZE}`}
+          links={[
+            { href: "/play", label: "▶ Play" },
+            { href: "/bracket", label: "Bracket" },
+            { href: "/players", label: "Players" },
+            { href: "/standings", label: "Standings", active: true },
+          ]}
+        />
+        <ArcadeStandings rows={rows} />
+      </ArcadeStage>
+    );
   }
 
   return (

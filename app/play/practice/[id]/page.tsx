@@ -33,6 +33,21 @@ export default async function PracticeRoundPage({
     .limit(1);
   if (!round) notFound();
 
+  // Tiebreaker access gate — only the two players in the linked matchup
+  // (and the host, for previewing) can take it. Everyone else gets a 404
+  // so the URL doesn't leak the round's existence.
+  if (round.tiebreakerMatchupId && user.role !== "author") {
+    const [m] = await db
+      .select()
+      .from(schema.matchups)
+      .where(eq(schema.matchups.id, round.tiebreakerMatchupId))
+      .limit(1);
+    const allowed =
+      !!m &&
+      (m.playerAUserId === user.id || m.playerBUserId === user.id);
+    if (!allowed) notFound();
+  }
+
   const data = await getRoundWithQuestions(round.id);
   if (!data) notFound();
 

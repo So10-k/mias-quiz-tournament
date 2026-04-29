@@ -2,13 +2,18 @@ import Link from "next/link";
 import { Stage } from "@/components/Stage";
 import { PlayerCard } from "@/components/PlayerCard";
 import { PageLockedNotice } from "@/components/PageLockedNotice";
+import { ArcadeStage } from "@/components/arcade/Stage";
+import { ArcadeTitle } from "@/components/arcade/Title";
+import { ArcadePlayers } from "@/components/arcade/ArcadePlayers";
 import {
   getActiveTournament,
   getCast,
   getLatestTournament,
 } from "@/lib/engine";
 import { isPageLocked } from "@/lib/page-locks";
+import { getSiteTheme } from "@/lib/site-theme";
 import { currentUser } from "@/lib/session";
+import { AUTHOR_NAME } from "@/lib/author";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +65,36 @@ export default async function CastPage() {
     : fewLeft
     ? `${numberWord(active.length)} players left!`
     : "Players";
+
+  const theme = await getSiteTheme();
+  if (theme === "arcade") {
+    const limit = tournament.strikeLimit ?? 2;
+    const players = cast.map((row) => ({
+      id: row.enrollment.id,
+      name: row.user.name,
+      email: row.user.email,
+      hearts: Math.max(0, limit - row.enrollment.strikeCount),
+      isOut: !!row.enrollment.eliminatedAt,
+      isAuthor:
+        (row.user.name ?? "").toLowerCase() === AUTHOR_NAME.toLowerCase(),
+    }));
+    return (
+      <ArcadeStage scrollable>
+        <ArcadeTitle
+          eyebrow="Roster"
+          title="Players"
+          subtitle={`${active.length} still in · ${eliminated.length} eliminated`}
+          links={[
+            { href: "/play", label: "▶ Play" },
+            { href: "/bracket", label: "Bracket" },
+            { href: "/players", label: "Players", active: true },
+            { href: "/standings", label: "Standings" },
+          ]}
+        />
+        <ArcadePlayers players={players} />
+      </ArcadeStage>
+    );
+  }
 
   return (
     <Stage scrollable>

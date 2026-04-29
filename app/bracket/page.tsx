@@ -2,6 +2,9 @@ import Link from "next/link";
 import { Stage } from "@/components/Stage";
 import { BracketView } from "@/components/BracketView";
 import { PageLockedNotice } from "@/components/PageLockedNotice";
+import { ArcadeStage } from "@/components/arcade/Stage";
+import { ArcadeTitle } from "@/components/arcade/Title";
+import { ArcadeBracket } from "@/components/arcade/ArcadeBracket";
 import {
   getActiveTournament,
   getLatestTournament,
@@ -12,6 +15,7 @@ import {
   getBracketChampionId,
 } from "@/lib/bracket";
 import { isPageLocked } from "@/lib/page-locks";
+import { getSiteTheme } from "@/lib/site-theme";
 import { currentUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -45,6 +49,26 @@ export default async function BracketPage() {
   const rounds = await getBracket(t.id);
   const users = await getBracketUsers(t.id);
   const championId = await getBracketChampionId(t.id);
+  const theme = await getSiteTheme();
+
+  if (theme === "arcade") {
+    return (
+      <ArcadeStage scrollable>
+        <ArcadeTitle
+          eyebrow="Live Tournament"
+          title="The Bracket"
+          subtitle="Climb the ladder. Stay alive. Take the crown."
+          links={[
+            { href: "/play", label: "▶ Play" },
+            { href: "/bracket", label: "Bracket", active: true },
+            { href: "/players", label: "Players" },
+            { href: "/standings", label: "Standings" },
+          ]}
+        />
+        <ArcadeBracket rounds={rounds} users={users} championId={championId} />
+      </ArcadeStage>
+    );
+  }
 
   return (
     <Stage scrollable>

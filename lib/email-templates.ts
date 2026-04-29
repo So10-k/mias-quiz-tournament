@@ -1017,12 +1017,143 @@ const TIME_RUNNING_OUT: EmailTemplate = {
   },
 };
 
+const TIEBREAKER_QUIZ: EmailTemplate = {
+  id: "tiebreaker-quiz",
+  name: "Tiebreaker · 5 questions, winner advances",
+  description:
+    "Sent to the two players who tied. Each gets a link to a 5-question tiebreaker quiz; whoever scores higher takes the bracket slot.",
+  defaultSubject: "Tiebreaker — Mia's Quiz Tournament",
+  fields: [
+    {
+      key: "quizUrl",
+      label: "Tiebreaker quiz URL",
+      kind: "text",
+      defaultValue: "https://quiz.miaswebsites.art/play/practice/REPLACE_ME",
+      hint: "Run scripts/create-tiebreaker.ts to generate this URL.",
+      maxLength: 240,
+    },
+    {
+      key: "topic",
+      label: "Topic shown in the email",
+      kind: "text",
+      defaultValue: "U.S. law",
+      maxLength: 80,
+    },
+    {
+      key: "personalNote",
+      label: "Personal note",
+      kind: "textarea",
+      defaultValue:
+        "{firstName} — your bracket score came up dead even with one other player, so we're settling it the only way that's fair: a 5-question tiebreaker. Higher scorer advances. No looking things up — eyes on the screen.",
+      hint: "Uses {firstName} so each recipient sees their own name.",
+      rows: 4,
+      maxLength: 800,
+    },
+    {
+      key: "rules",
+      label: "Rules block",
+      kind: "textarea",
+      defaultValue:
+        "Five questions. Multiple choice. No timer, but try to keep it under 10 minutes. Tab-leave strikes are still on, so don't pop another tab.",
+      rows: 3,
+      maxLength: 600,
+    },
+    {
+      key: "deadline",
+      label: "Deadline (free text)",
+      kind: "text",
+      defaultValue: "by midnight tonight",
+      maxLength: 80,
+    },
+  ],
+  render({ subject, fields }) {
+    const quizUrl = getField(this, fields, "quizUrl");
+    const topic = getField(this, fields, "topic");
+    const personalNote = getField(this, fields, "personalNote");
+    const rules = getField(this, fields, "rules");
+    const deadline = getField(this, fields, "deadline");
+    const finalSubject = subject.trim() || this.defaultSubject;
+
+    const text = [
+      "Mia's Quiz Tournament — Tiebreaker",
+      "",
+      personalNote,
+      "",
+      `Topic: ${topic}`,
+      `Deadline: ${deadline}`,
+      "",
+      "Rules:",
+      rules,
+      "",
+      `Take the tiebreaker: ${quizUrl}`,
+      "",
+      "— Sam · Mia's Quiz Tournament",
+    ].join("\n");
+
+    const para = (s: string) =>
+      `<p style="margin:0 0 14px;font-family:Quicksand,system-ui,sans-serif;font-size:16px;line-height:1.65;color:#1B2A4E;">${esc(
+        s
+      )}</p>`;
+
+    const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>${esc(finalSubject)}</title>
+<style>
+  @import url("https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Quicksand:wght@500;600;700&display=swap");
+</style>
+</head>
+<body style="margin:0;padding:0;background:#1B0440;font-family:Quicksand,system-ui,sans-serif;color:#F4ECFF;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:linear-gradient(180deg,#1B0440 0%,#0B0322 100%);">
+    <tr><td align="center" style="padding:32px 14px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="width:100%;max-width:600px;background:#FFFFFF;border:4px solid #1B2A4E;border-radius:28px;box-shadow:8px 8px 0 0 #1B2A4E;overflow:hidden;">
+        <tr><td style="height:8px;background:linear-gradient(90deg,#FFCC00 0%,#FF2D75 50%,#00F0FF 100%);line-height:0;font-size:0;">&nbsp;</td></tr>
+        <tr><td style="padding:32px 36px 8px 36px;">
+          <p style="margin:0 0 6px;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:13px;letter-spacing:0.18em;color:#E94B7E;text-transform:uppercase;">⚔️ Tiebreaker</p>
+          <h1 style="margin:0 0 16px;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:40px;color:#1B2A4E;line-height:1.05;">It's a tie. Higher scorer wins.</h1>
+          ${para(personalNote)}
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:18px 0;background:#FFF7E6;border:3px solid #1B2A4E;border-radius:16px;box-shadow:4px 4px 0 0 #1B2A4E;">
+            <tr><td style="padding:18px 22px;">
+              <p style="margin:0 0 6px;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:13px;letter-spacing:0.06em;color:#E94B7E;text-transform:uppercase;">⏱️ The challenge</p>
+              <p style="margin:0;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:24px;color:#1B2A4E;line-height:1.2;">5 questions on ${esc(topic)}.</p>
+              <p style="margin:6px 0 0;font-family:Quicksand,system-ui,sans-serif;font-size:14px;color:#3B4A7E;">Deadline: <strong>${esc(deadline)}</strong></p>
+              <p style="margin:10px 0 0;font-family:Quicksand,system-ui,sans-serif;font-size:14px;color:#1B2A4E;line-height:1.55;">${esc(rules).replace(/\n/g, "<br/>")}</p>
+            </td></tr>
+          </table>
+        </td></tr>
+        <tr><td align="center" style="padding:6px 36px 22px 36px;">
+          <a href="${esc(
+            quizUrl
+          )}" style="display:inline-block;background:#FF6B9D;color:white;padding:18px 32px;border:3px solid #1B2A4E;border-radius:14px;box-shadow:4px 4px 0 0 #1B2A4E;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:20px;text-decoration:none;">▶ Take the tiebreaker</a>
+        </td></tr>
+        <tr><td style="padding:8px 36px 8px 36px;">
+          <div style="margin:6px 0 4px;font-family:Fredoka,Quicksand,system-ui,sans-serif;">
+            <p style="margin:0;font-weight:600;font-size:16px;color:#1B2A4E;">Good luck —</p>
+            <p style="margin:6px 0 0;font-weight:700;font-size:32px;color:#E94B7E;line-height:1;">Sam</p>
+            <p style="margin:6px 0 0;font-family:Quicksand,system-ui,sans-serif;font-size:13px;color:#3B4A7E;">Site administrator&nbsp;·&nbsp;Mia&rsquo;s Quiz Tournament</p>
+          </div>
+        </td></tr>
+        <tr><td style="padding:0;line-height:0;font-size:0;">
+          <div style="background:#7BC4A4;border-top:3px solid #1B2A4E;height:48px;">&nbsp;</div>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+
+    return { subject: finalSubject, html, text };
+  },
+};
+
 const TEMPLATES: EmailTemplate[] = [
   SCHEDULE_SHIFT_PUBLIC,
   BRACKET_UPDATE,
   STILL_IN,
   ELIMINATED_REVEAL,
   TIME_RUNNING_OUT,
+  TIEBREAKER_QUIZ,
 ];
 
 export function listTemplates(): EmailTemplate[] {

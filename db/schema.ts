@@ -177,6 +177,10 @@ export const rounds = pgTable("rounds", {
   // Practice rounds let players try the format before the tournament begins.
   // They never give strikes, never feed the bracket, and stay open.
   isPractice: boolean("is_practice").notNull().default(false),
+  // When set, this round is a tiebreaker for a specific bracket matchup.
+  // Only the two players in that matchup can access the round; it's hidden
+  // from public practice listings.
+  tiebreakerMatchupId: text("tiebreaker_matchup_id"),
   opensAt: timestamp("opens_at", { mode: "date" }),
   closesAt: timestamp("closes_at", { mode: "date" }),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),

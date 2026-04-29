@@ -12,6 +12,8 @@ import {
   type LockablePage,
 } from "@/lib/page-locks";
 import { togglePageLockAction } from "./page-locks-actions";
+import { getSiteTheme } from "@/lib/site-theme";
+import { setSiteThemeAction } from "./site-theme-actions";
 import {
   getOrCreateActiveTournament,
   getRoundsForTournament,
@@ -67,6 +69,7 @@ export default async function HostPanel({
   const bracketUsers = await getBracketUsers(tournament.id);
   const championId = await getBracketChampionId(tournament.id);
   const lockedPages = await getLockedPages();
+  const siteTheme = await getSiteTheme();
 
   const activeRound = rounds.find((r) => r.status === "active");
   const draftRounds = rounds.filter((r) => r.status === "draft");
@@ -81,6 +84,9 @@ export default async function HostPanel({
             🛠️ Host Panel
           </h1>
           <div className="flex gap-2 flex-wrap">
+            <Link href="/host/attempts" className="pop pop-grass text-sm">
+              📡 Attempts
+            </Link>
             <Link href="/host/visitors" className="pop pop-sky text-sm">
               👁 Visitors
             </Link>
@@ -341,6 +347,57 @@ export default async function HostPanel({
               </ul>
             </div>
           ) : null}
+        </section>
+
+        {/* Public site theme */}
+        <section className="card px-5 py-5">
+          <div className="flex items-baseline justify-between gap-3 flex-wrap">
+            <h2 className="font-display text-2xl text-navy">🎨 Site theme</h2>
+            <span className="font-body text-xs text-navy-soft">
+              Affects /bracket, /players, /standings (public pages only)
+            </span>
+          </div>
+          <p className="font-body text-sm text-navy-soft mt-1">
+            Pick the look of the public pages. <strong>Picture-book</strong> is
+            the original sunny picture-book theme. <strong>Arcade</strong> is a
+            Supercell-store-inspired dark mode with neon glow, rarity badges and
+            a holographic title.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-3">
+            <form action={setSiteThemeAction}>
+              <input type="hidden" name="theme" value="default" />
+              <button
+                type="submit"
+                disabled={siteTheme === "default"}
+                className={
+                  "pop text-sm " +
+                  (siteTheme === "default" ? "pop-coral" : "pop-white")
+                }
+              >
+                {siteTheme === "default" ? "● " : ""}🌞 Picture-book (default)
+              </button>
+            </form>
+            <form action={setSiteThemeAction}>
+              <input type="hidden" name="theme" value="arcade" />
+              <button
+                type="submit"
+                disabled={siteTheme === "arcade"}
+                className={
+                  "pop text-sm " +
+                  (siteTheme === "arcade" ? "pop-coral" : "pop-white")
+                }
+              >
+                {siteTheme === "arcade" ? "● " : ""}🎮 Arcade (neon)
+              </button>
+            </form>
+          </div>
+          <p className="font-body text-xs text-navy-soft mt-3">
+            Currently:{" "}
+            <strong className="text-navy">
+              {siteTheme === "arcade" ? "Arcade (neon)" : "Picture-book"}
+            </strong>
+            . Change takes effect within ~30 seconds (cache).
+          </p>
         </section>
 
         {/* Public-page visibility toggles */}
