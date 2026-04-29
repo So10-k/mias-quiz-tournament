@@ -51,6 +51,12 @@ export const subject = pgEnum("subject", [
   "sports",
 ]);
 export const librarySource = pgEnum("library_source", ["seed", "host"]);
+export const fileAccessMode = pgEnum("file_access_mode", [
+  "public",
+  "login",
+  "users",
+  "password",
+]);
 
 // ─── core ───────────────────────────────────────────────────────────────────
 
@@ -236,6 +242,77 @@ export const answers = pgTable("answers", {
     onDelete: "set null",
   }),
   isCorrect: boolean("is_correct").notNull().default(false),
+});
+
+// ─── site-level key/value settings ─────────────────────────────────────────
+
+export const appSettings = pgTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: text("value"),
+  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+// ─── IP blocklist ──────────────────────────────────────────────────────────
+
+export const blockedIps = pgTable("blocked_ips", {
+  id: text("id").primaryKey(),
+  ip: text("ip").notNull().unique(),
+  reason: text("reason"),
+  createdByUserId: text("created_by_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+// ─── visitor analytics ─────────────────────────────────────────────────────
+
+// One row per page-view ping. The client mounts a tiny logger that POSTs
+// once per route load; the server enriches with IP / Vercel geo headers.
+export const visitLogs = pgTable("visit_logs", {
+  id: text("id").primaryKey(),
+  // Random per-device cookie ID so we can group anonymous visits before they
+  // sign in, and join later with their userId once they do.
+  fingerprint: text("fingerprint").notNull(),
+  userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
+  path: text("path").notNull(),
+  referrer: text("referrer"),
+  userAgent: text("user_agent"),
+  ip: text("ip"),
+  country: text("country"),
+  region: text("region"),
+  city: text("city"),
+  // The IANA timezone name reported by the browser (e.g. America/Chicago).
+  timezone: text("timezone"),
+  // BCP-47 language tag (en-US, en-GB, …).
+  language: text("language"),
+  // "WxH@DPR" e.g. "1440x900@2"
+  screen: text("screen"),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+// ─── file vault (R2-backed) ─────────────────────────────────────────────────
+
+export const files = pgTable("files", {
+  id: text("id").primaryKey(),
+  // R2 object key, e.g. "files/abc123/intro.pdf". Unique so we can find by key.
+  storageKey: text("storage_key").notNull().unique(),
+  originalName: text("original_name").notNull(),
+  mimeType: text("mime_type").notNull(),
+  size: integer("size").notNull().default(0),
+  accessMode: fileAccessMode("access_mode").notNull().default("login"),
+  // scrypt(salt + key) for password mode. Stored as "salt:hex.key:hex".
+  passwordHash: text("password_hash"),
+  // For 'users' mode — comma-separated lowercase emails.
+  allowedEmails: text("allowed_emails"),
+  // When false, the viewer hides download buttons and the asset endpoint
+  // strips Content-Disposition (best-effort — clients can still right-click).
+  allowDownload: boolean("allow_download").notNull().default(true),
+  // Optional human-friendly note shown to viewers.
+  note: text("note"),
+  createdByUserId: text("created_by_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
 });
 
 // ─── question library ──────────────────────────────────────────────────────

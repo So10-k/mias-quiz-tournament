@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Stage } from "@/components/Stage";
 import { MeetMiaPlayer } from "@/components/MeetMiaPlayer";
-import { AUTHOR_NAME, AUTHOR_AGE } from "@/lib/author";
+import { AUTHOR_NAME, AUTHOR_AGE, PRIZE } from "@/lib/author";
 import { getActiveTournament, getLatestTournament, getCast } from "@/lib/engine";
 import { db, schema } from "@/db";
 import { and, eq } from "drizzle-orm";
@@ -70,6 +70,10 @@ export default async function Home() {
             {subtitle}
           </p>
 
+          <div className="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-coral text-white border-3 border-navy rounded-full shadow-pop-sm font-display text-base md:text-lg -rotate-1">
+            🏆 The prize: {PRIZE}
+          </div>
+
           <div className="mt-7 card px-7 py-5 max-w-2xl">
             {winnerName ? (
               <div className="flex flex-col items-center gap-2">
@@ -77,6 +81,9 @@ export default async function Home() {
                 <p className="font-display text-3xl md:text-4xl text-navy">
                   Champion:{" "}
                   <span className="text-coral-deep">{winnerName}</span>
+                </p>
+                <p className="font-display text-lg md:text-xl text-navy-soft mt-1">
+                  Wins: {PRIZE.toLowerCase()}
                 </p>
               </div>
             ) : latest?.status === "in_progress" ? (

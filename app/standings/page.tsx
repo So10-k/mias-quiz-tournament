@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { Stage } from "@/components/Stage";
 import { Crown } from "@/components/ink/Crown";
-import { AUTHOR_NAME } from "@/lib/author";
+import { PageLockedNotice } from "@/components/PageLockedNotice";
+import { AUTHOR_NAME, PRIZE } from "@/lib/author";
 import {
   getActiveTournament,
   getLatestTournament,
   getCast,
 } from "@/lib/engine";
+import { isPageLocked } from "@/lib/page-locks";
+import { currentUser } from "@/lib/session";
 import { db, schema } from "@/db";
 import { eq, asc, inArray } from "drizzle-orm";
 
@@ -16,6 +19,10 @@ export const dynamic = "force-dynamic";
 // current/latest tournament. Highest cumulative score first; ties broken by
 // fewest strikes, then earliest registration.
 export default async function StandingsPage() {
+  const me = await currentUser();
+  if ((await isPageLocked("standings")) && me?.role !== "author") {
+    return <PageLockedNotice title="The standings" emoji="📊" />;
+  }
   const t =
     (await getActiveTournament()) ?? (await getLatestTournament());
 
@@ -95,6 +102,12 @@ export default async function StandingsPage() {
           </h1>
           <p className="font-display text-base text-navy-soft mt-1">
             {t.status === "complete" ? "Final results" : "Live standings"}
+          </p>
+        </div>
+
+        <div className="card-sm px-5 py-3 w-full text-center bg-coral text-white">
+          <p className="font-display text-lg md:text-xl">
+            🏆 Prize: {PRIZE}
           </p>
         </div>
 

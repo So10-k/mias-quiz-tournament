@@ -6,6 +6,13 @@ import { AnnouncementForm } from "@/components/AnnouncementForm";
 import { BracketView } from "@/components/BracketView";
 import { currentUser } from "@/lib/session";
 import {
+  ALL_LOCKABLE,
+  getLockedPages,
+  pageLabel,
+  type LockablePage,
+} from "@/lib/page-locks";
+import { togglePageLockAction } from "./page-locks-actions";
+import {
   getOrCreateActiveTournament,
   getRoundsForTournament,
   getCast,
@@ -59,6 +66,7 @@ export default async function HostPanel({
   const bracket = await getBracket(tournament.id);
   const bracketUsers = await getBracketUsers(tournament.id);
   const championId = await getBracketChampionId(tournament.id);
+  const lockedPages = await getLockedPages();
 
   const activeRound = rounds.find((r) => r.status === "active");
   const draftRounds = rounds.filter((r) => r.status === "draft");
@@ -68,13 +76,24 @@ export default async function HostPanel({
   return (
     <Stage scrollable>
       <div className="max-w-4xl mx-auto pt-4 px-4 flex flex-col gap-5">
-        <div className="card-sm px-5 py-4 flex items-center justify-between gap-3">
+        <div className="card-sm px-5 py-4 flex items-center justify-between gap-3 flex-wrap">
           <h1 className="font-display text-3xl md:text-4xl text-navy">
             🛠️ Host Panel
           </h1>
-          <Link href="/" className="pop pop-white text-sm">
-            ← Home
-          </Link>
+          <div className="flex gap-2 flex-wrap">
+            <Link href="/host/visitors" className="pop pop-sky text-sm">
+              👁 Visitors
+            </Link>
+            <Link href="/host/blocks" className="pop pop-danger text-sm">
+              🛑 Blocks
+            </Link>
+            <Link href="/host/files" className="pop pop-yellow text-sm">
+              📁 Files
+            </Link>
+            <Link href="/" className="pop pop-white text-sm">
+              ← Home
+            </Link>
+          </div>
         </div>
 
         {error ? (
@@ -322,6 +341,65 @@ export default async function HostPanel({
               </ul>
             </div>
           ) : null}
+        </section>
+
+        {/* Public-page visibility toggles */}
+        <section className="card px-5 py-5">
+          <div className="flex items-baseline justify-between gap-3 flex-wrap">
+            <h2 className="font-display text-2xl text-navy">
+              👁 Public pages
+            </h2>
+            <span className="font-body text-xs text-navy-soft">
+              You always see them; this only hides for everyone else.
+            </span>
+          </div>
+          <p className="font-body text-sm text-navy-soft mt-1">
+            Tap a page to flip it open or closed. Closed pages show a friendly
+            “paused” card to non-author visitors.
+          </p>
+          <div className="mt-3 flex flex-col gap-2">
+            {(ALL_LOCKABLE as LockablePage[]).map((p) => {
+              const locked = lockedPages.has(p);
+              return (
+                <form
+                  key={p}
+                  action={togglePageLockAction}
+                  className="flex items-center gap-3 card-sm bg-white px-3 py-2"
+                >
+                  <input type="hidden" name="page" value={p} />
+                  <input
+                    type="hidden"
+                    name="locked"
+                    value={locked ? "no" : "yes"}
+                  />
+                  <span className="font-display text-base text-navy flex-1">
+                    {pageLabel(p)}{" "}
+                    <code className="font-body text-xs text-navy-soft">
+                      /{p}
+                    </code>
+                  </span>
+                  <span
+                    className={
+                      "font-display text-xs px-2 py-1 rounded-md border-2 border-navy " +
+                      (locked
+                        ? "bg-coral-deep text-white"
+                        : "bg-grass text-white")
+                    }
+                  >
+                    {locked ? "🔒 hidden" : "👁 visible"}
+                  </span>
+                  <button
+                    type="submit"
+                    className={
+                      "pop text-sm " + (locked ? "pop-grass" : "pop-coral")
+                    }
+                  >
+                    {locked ? "Open it back up" : "Hide for visitors"}
+                  </button>
+                </form>
+              );
+            })}
+          </div>
         </section>
 
         {/* Announcements */}

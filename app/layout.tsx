@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { VisitLogger } from "@/components/VisitLogger";
+// import { WelcomeBackToast } from "@/components/WelcomeBackToast";
 
 export const metadata: Metadata = {
   title: "Mia's Quiz Tournament",
@@ -13,7 +15,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        {children}
+        <VisitLogger />
+        {/* <WelcomeBackToast /> */}
+      </body>
     </html>
   );
 }

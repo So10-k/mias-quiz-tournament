@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { submitChapter } from "@/app/play/round/[n]/actions";
 import { submitPractice } from "@/app/play/practice/[id]/actions";
@@ -20,6 +20,10 @@ type Props = {
 
 const palette = ["pop-coral", "pop-yellow", "pop-grass", "pop-sky"];
 
+// Two free tab-leaves; the third triggers a forced restart.
+const TAB_STRIKE_LIMIT = 3;
+const FREE_STRIKES = TAB_STRIKE_LIMIT - 1;
+
 export function ChapterRunner({
   tournamentId,
   chapterNumber,
@@ -33,13 +37,68 @@ export function ChapterRunner({
   const [page, setPage] = useState<number>(intro ? -1 : 0);
   const [picks, setPicks] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [tabStrikes, setTabStrikes] = useState(0);
+  const [strikeToast, setStrikeToast] = useState<number>(0);
+  const [forceRestart, setForceRestart] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const last = questions.length - 1;
   const allAnswered = questions.every((q) => picks[q.id]);
 
+  const restart = () => {
+    setPicks({});
+    setPage(intro ? -1 : 0);
+    setSubmitting(false);
+    setTabStrikes(0);
+    setStrikeToast(0);
+    setForceRestart(false);
+  };
+
+  // Tab-leave guard. Each visibilitychange→hidden bumps a counter; the third
+  // hit wipes progress. Without this you could just flip to Google mid-round.
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState !== "hidden") return;
+      setTabStrikes((s) => {
+        const next = s + 1;
+        if (next >= TAB_STRIKE_LIMIT) {
+          queueMicrotask(() => setForceRestart(true));
+        } else {
+          queueMicrotask(() => setStrikeToast(next));
+        }
+        return next;
+      });
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, []);
+
+  useEffect(() => {
+    if (!strikeToast || forceRestart) return;
+    const t = setTimeout(() => setStrikeToast(0), 6000);
+    return () => clearTimeout(t);
+  }, [strikeToast, forceRestart]);
+
+  // Block keyboard copy/select-all/save while in the runner. CSS already
+  // handles selection, but Ctrl/Cmd+C will still copy a focused option label
+  // unless we intercept.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod) return;
+      const k = e.key.toLowerCase();
+      if (k === "c" || k === "a" || k === "s" || k === "p" || k === "x") {
+        e.preventDefault();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
   const onSubmit = async () => {
-    if (!allAnswered || submitting) return;
+    if (!allAnswered || submitting || forceRestart) return;
     setSubmitting(true);
+    setSubmitError(null);
     const fd = new FormData();
     for (const [qid, oid] of Object.entries(picks)) fd.set(`q:${qid}`, oid);
     try {
@@ -52,13 +111,118 @@ export function ChapterRunner({
         fd.set("tournamentId", tournamentId);
         await submitChapter(fd);
       }
-    } catch {
+      // The action resolved without throwing. In Next 15 this is the happy
+      // path even on redirect — the framework processes the response and
+      // navigates. If for some reason navigation doesn't happen, drop the
+      // "Sending…" state so the user can try again instead of being stuck.
+      setSubmitting(false);
+    } catch (e: unknown) {
+      // Some Next versions still surface redirect/notFound as thrown
+      // signals — let those bubble so the framework can act on them.
+      const digest = (e as { digest?: string } | null)?.digest;
+      if (
+        typeof digest === "string" &&
+        (digest.startsWith("NEXT_REDIRECT") || digest === "NEXT_NOT_FOUND")
+      ) {
+        throw e;
+      }
+      // eslint-disable-next-line no-console
+      console.error("submit failed:", e);
+      const msg =
+        e instanceof Error
+          ? e.message
+          : "Something went wrong sending your answers.";
+      setSubmitError(msg);
       setSubmitting(false);
     }
   };
 
   return (
-    <div className="max-w-3xl mx-auto pt-4">
+    <div
+      className="max-w-3xl mx-auto pt-4 select-none"
+      style={{
+        WebkitUserSelect: "none",
+        userSelect: "none",
+        WebkitTouchCallout: "none",
+      }}
+      onContextMenu={(e) => e.preventDefault()}
+      onCopy={(e) => e.preventDefault()}
+      onCut={(e) => e.preventDefault()}
+      onDragStart={(e) => e.preventDefault()}
+    >
+      {/* tab-leave strike warning — full-screen so it actually covers the
+          question and clears the nav bar */}
+      <AnimatePresence>
+        {strikeToast && !forceRestart ? (
+          <motion.div
+            key={`strike-${strikeToast}`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6"
+            style={{ background: "rgba(27,42,78,0.78)" }}
+            onClick={() => setStrikeToast(0)}
+          >
+            <motion.div
+              initial={{ scale: 0.92, y: 12 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.96, y: 8 }}
+              transition={{ duration: 0.2 }}
+              className="card text-center w-full max-w-md px-5 py-6 sm:px-7 sm:py-7"
+              style={{ background: "white" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="text-5xl sm:text-6xl">
+                {strikeToast < FREE_STRIKES ? "⚠️" : "🛑"}
+              </div>
+              <p className="font-display text-xs sm:text-sm uppercase tracking-wider text-coral-deep mt-3">
+                Tab-leave detected
+              </p>
+              <h2 className="font-display text-2xl sm:text-3xl text-navy mt-1 leading-tight">
+                Strike {strikeToast} of {FREE_STRIKES}
+              </h2>
+              <p className="font-body text-base sm:text-lg text-navy-soft mt-3 leading-snug">
+                {strikeToast < FREE_STRIKES
+                  ? "Leaving the tab during a quiz counts as a strike. One more and you'll be on your last warning."
+                  : "Last warning! One more tab-leave and your answers reset and you start over."}
+              </p>
+              <button
+                onClick={() => setStrikeToast(0)}
+                className="pop pop-coral mt-5 sm:mt-6 text-base sm:text-lg w-full sm:w-auto justify-center"
+              >
+                Got it
+              </button>
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      {/* forced-restart overlay (3rd tab-leave) */}
+      {forceRestart ? (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center p-4 sm:p-6"
+          style={{ background: "rgba(27,42,78,0.88)" }}
+        >
+          <div className="card text-center w-full max-w-md px-5 py-6 sm:px-7 sm:py-7">
+            <div className="text-5xl sm:text-6xl">🚫</div>
+            <h2 className="font-display text-2xl sm:text-3xl text-navy mt-3 leading-tight">
+              Tab-leave limit reached
+            </h2>
+            <p className="font-body text-base sm:text-lg text-navy-soft mt-3 leading-snug">
+              You left the tab too many times — your answers on this round
+              have been wiped. Start over from the top.
+            </p>
+            <button
+              onClick={restart}
+              className="pop pop-coral mt-5 sm:mt-7 text-base sm:text-xl w-full sm:w-auto justify-center"
+            >
+              Start over
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {/* progress dots */}
       <div className="flex items-center justify-center gap-2 mb-5">
         {questions.map((_, i) => {
@@ -210,6 +374,17 @@ export function ChapterRunner({
                 {submitting ? "Sending…" : "📨 Send it!"}
               </button>
             </div>
+            {submitError ? (
+              <div className="mt-5 card-sm bg-coral-deep text-white px-4 py-3 text-left">
+                <p className="font-display text-base">⚠️ Submit failed</p>
+                <p className="font-body text-sm mt-1 break-words">
+                  {submitError}
+                </p>
+                <p className="font-body text-xs mt-2 opacity-90">
+                  Try again. If it keeps failing, screenshot this and send to Sam.
+                </p>
+              </div>
+            ) : null}
           </motion.div>
         )}
       </AnimatePresence>

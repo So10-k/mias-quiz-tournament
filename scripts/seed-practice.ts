@@ -1,5 +1,5 @@
-// Creates a practice round titled "Warm-up: Science!" with the 8 questions
-// the host requested. Idempotent: skips if a practice round with that exact
+// Creates a practice round titled "Warm-up: Math!" with progressively harder questions.
+// Idempotent: skips if a practice round with that exact
 // title already exists in the active tournament.
 //
 //   DATABASE_URL=... npx tsx --tsconfig tsconfig.json scripts/seed-practice.ts
@@ -16,84 +16,102 @@ import {
 const sql = neon(process.env.DATABASE_URL!);
 const db = drizzle(sql, { schema });
 
-const TITLE = "Warm-up: Science!";
+const TITLE = "Warm-up: Math!";
 const INTRO =
-  "These don't count for anything — they're just to get the hang of how the game works. Have fun!";
+  "These start simple but ramp up quickly — by the end you'll need real formulas. Good luck.";
 
 const QUESTIONS: Array<{
   prompt: string;
   options: Array<{ label: string; isCorrect: boolean }>;
 }> = [
   {
-    prompt: "How many days in a week?",
+    prompt: "What is 8 + 5?",
     options: [
-      { label: "7", isCorrect: true },
-      { label: "5", isCorrect: false },
-      { label: "6", isCorrect: false },
+      { label: "12", isCorrect: false },
+      { label: "13", isCorrect: true },
+      { label: "14", isCorrect: false },
+      { label: "11", isCorrect: false },
+    ],
+  },
+  {
+    prompt: "What is 9 × 6?",
+    options: [
+      { label: "56", isCorrect: false },
+      { label: "63", isCorrect: false },
+      { label: "54", isCorrect: true },
+      { label: "48", isCorrect: false },
+    ],
+  },
+  {
+    prompt: "Solve: 3² + 4²",
+    options: [
+      { label: "25", isCorrect: true },
+      { label: "12", isCorrect: false },
+      { label: "49", isCorrect: false },
+      { label: "7", isCorrect: false },
+    ],
+  },
+  {
+    prompt: "What is √144?",
+    options: [
       { label: "10", isCorrect: false },
+      { label: "12", isCorrect: true },
+      { label: "14", isCorrect: false },
+      { label: "16", isCorrect: false },
     ],
   },
   {
-    prompt: "What gas do plants breathe in?",
+    prompt: "Solve for x: 2x + 7 = 19",
     options: [
-      { label: "Carbon dioxide", isCorrect: true },
-      { label: "Oxygen", isCorrect: false },
-      { label: "Helium", isCorrect: false },
-      { label: "Methane", isCorrect: false },
+      { label: "5", isCorrect: false },
+      { label: "6", isCorrect: true },
+      { label: "7", isCorrect: false },
+      { label: "4", isCorrect: false },
     ],
   },
   {
-    prompt: "What do plants need to make food?",
+    prompt: "What is the slope of the line passing through (2,3) and (6,11)?",
     options: [
-      { label: "Sunlight", isCorrect: true },
-      { label: "Darkness", isCorrect: false },
-      { label: "Cold", isCorrect: false },
-      { label: "Salt", isCorrect: false },
+      { label: "3", isCorrect: false },
+      { label: "2", isCorrect: true },
+      { label: "4", isCorrect: false },
+      { label: "1", isCorrect: false },
     ],
   },
   {
-    prompt: "Which organ filters blood?",
+    prompt: "If f(x) = 2x² - 3x + 1, what is f(3)?",
     options: [
-      { label: "Kidney", isCorrect: true },
-      { label: "Brain", isCorrect: false },
-      { label: "Lung", isCorrect: false },
-      { label: "Heart", isCorrect: false },
+      { label: "10", isCorrect: true },
+      { label: "12", isCorrect: false },
+      { label: "9", isCorrect: false },
+      { label: "7", isCorrect: false },
     ],
   },
   {
-    prompt: "What's the freezing point of water (Celsius)?",
+    prompt: "A radioactive substance has a half-life of 10 years. If you start with 80g, how much remains after 20 years?",
     options: [
-      { label: "0", isCorrect: true },
-      { label: "32", isCorrect: false },
-      { label: "100", isCorrect: false },
-      { label: "-10", isCorrect: false },
+      { label: "10g", isCorrect: false },
+      { label: "40g", isCorrect: false },
+      { label: "20g", isCorrect: true },
+      { label: "5g", isCorrect: false },
     ],
   },
   {
-    prompt: "The brightest star in our sky is…?",
+    prompt: "Using the ideal gas law PV = nRT, if pressure doubles and temperature stays constant, what happens to volume?",
     options: [
-      { label: "The Sun", isCorrect: true },
-      { label: "Sirius", isCorrect: false },
-      { label: "Polaris", isCorrect: false },
-      { label: "Betelgeuse", isCorrect: false },
+      { label: "It halves", isCorrect: true },
+      { label: "It doubles", isCorrect: false },
+      { label: "It stays the same", isCorrect: false },
+      { label: "It quadruples", isCorrect: false },
     ],
   },
   {
-    prompt: "What was the first artificial satellite?",
+    prompt: "In optics, aperture diameter doubles. How does light-gathering power change?",
     options: [
-      { label: "Sputnik 1", isCorrect: true },
-      { label: "Hubble", isCorrect: false },
-      { label: "Apollo 11", isCorrect: false },
-      { label: "Voyager", isCorrect: false },
-    ],
-  },
-  {
-    prompt: "Which planet has the strongest gravity?",
-    options: [
-      { label: "Jupiter", isCorrect: true },
-      { label: "Earth", isCorrect: false },
-      { label: "Mercury", isCorrect: false },
-      { label: "Mars", isCorrect: false },
+      { label: "Doubles", isCorrect: false },
+      { label: "Quadruples", isCorrect: true },
+      { label: "Halves", isCorrect: false },
+      { label: "Stays the same", isCorrect: false },
     ],
   },
 ];

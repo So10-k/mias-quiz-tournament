@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { Stage } from "@/components/Stage";
 import { PlayerCard } from "@/components/PlayerCard";
+import { PageLockedNotice } from "@/components/PageLockedNotice";
 import {
   getActiveTournament,
   getCast,
   getLatestTournament,
 } from "@/lib/engine";
+import { isPageLocked } from "@/lib/page-locks";
+import { currentUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +20,10 @@ function numberWord(n: number) {
 }
 
 export default async function CastPage() {
+  const me = await currentUser();
+  if ((await isPageLocked("players")) && me?.role !== "author") {
+    return <PageLockedNotice title="The players list" emoji="👥" />;
+  }
   const tournament =
     (await getActiveTournament()) ?? (await getLatestTournament());
 

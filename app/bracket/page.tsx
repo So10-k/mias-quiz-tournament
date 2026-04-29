@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Stage } from "@/components/Stage";
 import { BracketView } from "@/components/BracketView";
+import { PageLockedNotice } from "@/components/PageLockedNotice";
 import {
   getActiveTournament,
   getLatestTournament,
@@ -10,10 +11,16 @@ import {
   getBracketUsers,
   getBracketChampionId,
 } from "@/lib/bracket";
+import { isPageLocked } from "@/lib/page-locks";
+import { currentUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function BracketPage() {
+  const me = await currentUser();
+  if ((await isPageLocked("bracket")) && me?.role !== "author") {
+    return <PageLockedNotice title="The bracket" emoji="🏆" />;
+  }
   const t =
     (await getActiveTournament()) ?? (await getLatestTournament());
 

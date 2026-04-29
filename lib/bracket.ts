@@ -23,32 +23,6 @@ const { matchups, attempts, rounds, users, enrollments, tournaments } = schema;
 
 export type Matchup = typeof matchups.$inferSelect;
 
-// ─── helpers ────────────────────────────────────────────────────────────────
-
-function nextPow2(n: number) {
-  if (n < 1) return 1;
-  return Math.pow(2, Math.ceil(Math.log2(Math.max(2, n))));
-}
-
-// "Standard" seed pairing for round 1: 1v8, 4v5, 2v7, 3v6 etc.
-// Returns an ordering of seed indexes (0..size-1) such that pairs (0,1), (2,3)
-// etc. are correctly seeded.
-function bracketSeedOrder(size: number): number[] {
-  // Recursive doubling: start with [0,1], expand to [0, size-1, size/2-1, size/2, ...]
-  let arr = [0, 1];
-  let s = 2;
-  while (s < size) {
-    s *= 2;
-    const next: number[] = [];
-    for (const x of arr) {
-      next.push(x);
-      next.push(s - 1 - x);
-    }
-    arr = next;
-  }
-  return arr;
-}
-
 // ─── public API ─────────────────────────────────────────────────────────────
 
 export type BracketRound = {
@@ -77,6 +51,20 @@ export async function getBracket(tournamentId: string): Promise<BracketRound[]> 
 // Build (or rebuild) a single-elim bracket from the given seed order.
 // `seedUserIds` is an array of userIds in seeding order (seed #1 first).
 // All existing matchups are wiped first.
+//
+// Pairing rule (max-pair): every round packs as many real matchups as it can
+// before allowing a BYE. For odd player counts, exactly ONE bye is granted —
+// to the top seed, which is the standard convention. Each subsequent round
+// has ceil(prev / 2) slots; if the count entering a round is odd, the BYE
+// naturally falls in that round's tail slot.
+//
+// Concretely for N=11:
+//   R1 has 6 slots: slot 0 = top-seed bye, slots 1-5 = (1v10) (2v9) (3v8)
+//                   (4v7) (5v6). One bye, five real matches.
+//   R2 has 3 slots, all real once R1 finishes.
+//   R3 has 2 slots: 1 real + 1 trailing bye for the winner of R2 slot 2.
+//   R4 = final.
+// Total byes: 2 (vs 5 under the previous power-of-2-padded approach).
 export async function generateBracket(
   tournamentId: string,
   seedUserIds: string[]
@@ -87,58 +75,63 @@ export async function generateBracket(
 
   await db.delete(matchups).where(eq(matchups.tournamentId, tournamentId));
 
-  const size = nextPow2(seedUserIds.length);
-  const byes = size - seedUserIds.length;
-  const order = bracketSeedOrder(size);
-  // Build padded array indexed by seed (0 = top seed). null = bye.
-  const seeds: (string | null)[] = [...seedUserIds, ...Array(byes).fill(null)];
+  const N = seedUserIds.length;
+  const isOdd = N % 2 === 1;
 
-  // Round 1 = size/2 matchups. Pairs come from `order`: (order[0], order[1]),
-  // (order[2], order[3]), ...
-  const round1Inserts: (typeof matchups.$inferInsert)[] = [];
-  for (let i = 0; i < size / 2; i++) {
-    const aIdx = order[i * 2];
-    const bIdx = order[i * 2 + 1];
-    const a = seeds[aIdx];
-    const b = seeds[bIdx];
-    let winner: string | null = null;
-    let resolvedVia: "auto" | null = null;
-    let resolvedAt: Date | null = null;
-    if (a && !b) {
-      winner = a;
-      resolvedVia = "auto";
-      resolvedAt = new Date();
-    } else if (!a && b) {
-      winner = b;
-      resolvedVia = "auto";
-      resolvedAt = new Date();
-    }
-    round1Inserts.push({
+  const r1Inserts: (typeof matchups.$inferInsert)[] = [];
+
+  // Top seed gets the only R1 bye when N is odd. Auto-resolved at insert
+  // time so propagateWinners pushes them straight into R2.
+  let cursor = 0;
+  if (isOdd) {
+    r1Inserts.push({
       id: makeId(),
       tournamentId,
       roundIndex: 1,
-      slot: i,
-      playerAUserId: a,
-      playerBUserId: b,
-      winnerUserId: winner,
-      resolvedVia,
-      resolvedAt,
+      slot: 0,
+      playerAUserId: seedUserIds[0],
+      playerBUserId: null,
+      winnerUserId: seedUserIds[0],
+      resolvedVia: "auto",
+      resolvedAt: new Date(),
+    });
+    cursor = 1;
+  }
+
+  // Pair the remaining players "top vs bottom reversed" so seed gradient is
+  // respected: 1v10, 2v9, 3v8, ... — same idea as the standard high-vs-low
+  // bracket seeding, just without the binary-tree slot reordering.
+  const playersToPair = isOdd ? seedUserIds.slice(1) : seedUserIds;
+  const pairCount = playersToPair.length / 2;
+  for (let i = 0; i < pairCount; i++) {
+    r1Inserts.push({
+      id: makeId(),
+      tournamentId,
+      roundIndex: 1,
+      slot: cursor + i,
+      playerAUserId: playersToPair[i],
+      playerBUserId: playersToPair[playersToPair.length - 1 - i],
+      winnerUserId: null,
+      resolvedVia: null,
+      resolvedAt: null,
     });
   }
 
-  // Generate empty placeholder matchups for every subsequent round so the
-  // bracket has a consistent shape from creation.
-  const emptyInserts: (typeof matchups.$inferInsert)[] = [];
-  let prev = size / 2;
+  // Subsequent rounds: each one has ceil(prev/2) placeholder slots. The
+  // existing floor(slot/2) propagation rule routes winners correctly; if a
+  // round's entry count is odd, the trailing slot just ends up with one
+  // player and propagateWinners auto-resolves it as a bye.
+  const placeholderInserts: (typeof matchups.$inferInsert)[] = [];
+  let prev = Math.ceil(N / 2);
   let r = 2;
   while (prev > 1) {
-    prev = prev / 2;
-    for (let i = 0; i < prev; i++) {
-      emptyInserts.push({
+    const slots = Math.ceil(prev / 2);
+    for (let s = 0; s < slots; s++) {
+      placeholderInserts.push({
         id: makeId(),
         tournamentId,
         roundIndex: r,
-        slot: i,
+        slot: s,
         playerAUserId: null,
         playerBUserId: null,
         winnerUserId: null,
@@ -146,73 +139,86 @@ export async function generateBracket(
         resolvedAt: null,
       });
     }
+    prev = slots;
     r++;
   }
 
-  await db.insert(matchups).values([...round1Inserts, ...emptyInserts]);
+  await db.insert(matchups).values([...r1Inserts, ...placeholderInserts]);
 
-  // Propagate any byes forward immediately.
+  // Walk byes forward immediately (the R1 top-seed bye, if any).
   await propagateWinners(tournamentId);
 }
 
 // Walk the bracket forward: for any matchup whose winner is set and whose
-// next-round slot is empty/wrong, fill it.
+// next-round slot is empty/wrong, fill it. Repeats until no further changes
+// are made — which matters now that byes can chain (e.g. a R3 trailing bye
+// auto-resolves as soon as its R2 feeder finishes, and that result then
+// needs to flow to R4).
 export async function propagateWinners(tournamentId: string) {
-  const all = await db
-    .select()
-    .from(matchups)
-    .where(eq(matchups.tournamentId, tournamentId))
-    .orderBy(asc(matchups.roundIndex), asc(matchups.slot));
-  const byKey = new Map<string, Matchup>();
-  for (const m of all) byKey.set(`${m.roundIndex}:${m.slot}`, m);
+  for (let pass = 0; pass < 50; pass++) {
+    const all = await db
+      .select()
+      .from(matchups)
+      .where(eq(matchups.tournamentId, tournamentId))
+      .orderBy(asc(matchups.roundIndex), asc(matchups.slot));
+    const byKey = new Map<string, Matchup>();
+    for (const m of all) byKey.set(`${m.roundIndex}:${m.slot}`, m);
 
-  for (const m of all) {
-    if (!m.winnerUserId) continue;
-    const nextRound = m.roundIndex + 1;
-    const nextSlot = Math.floor(m.slot / 2);
-    const next = byKey.get(`${nextRound}:${nextSlot}`);
-    if (!next) continue;
-    // The "A" position of the next matchup is filled by the lower-numbered
-    // slot of this round (m.slot even -> A, odd -> B).
-    const sideIsA = m.slot % 2 === 0;
-    const want = m.winnerUserId;
-    const have = sideIsA ? next.playerAUserId : next.playerBUserId;
-    if (have === want) continue;
-    await db
-      .update(matchups)
-      .set(
-        sideIsA
-          ? { playerAUserId: want }
-          : { playerBUserId: want }
-      )
-      .where(eq(matchups.id, next.id));
-    // Auto-resolve a single-side bye in the next round.
-    const newA = sideIsA ? want : next.playerAUserId;
-    const newB = sideIsA ? next.playerBUserId : want;
-    if (
-      next.roundIndex >= 2 &&
-      ((newA && !newB) || (!newA && newB)) &&
-      !next.winnerUserId
-    ) {
-      // Don't auto-resolve mid-round; only resolve a true bye if the OTHER
-      // feeder slot is decided too.
-      const otherFeeder = byKey.get(
-        `${m.roundIndex}:${nextSlot * 2 + (sideIsA ? 1 : 0)}`
-      );
-      if (otherFeeder && otherFeeder.winnerUserId === null && (
-        // sibling has no players at all → genuine bye
-        !otherFeeder.playerAUserId && !otherFeeder.playerBUserId
-      )) {
+    let changed = false;
+    for (const m of all) {
+      if (!m.winnerUserId) continue;
+      const nextRound = m.roundIndex + 1;
+      const nextSlot = Math.floor(m.slot / 2);
+      const next = byKey.get(`${nextRound}:${nextSlot}`);
+      if (!next) continue;
+      // The "A" position of the next matchup is filled by the lower-numbered
+      // slot of this round (m.slot even -> A, odd -> B).
+      const sideIsA = m.slot % 2 === 0;
+      const want = m.winnerUserId;
+      const have = sideIsA ? next.playerAUserId : next.playerBUserId;
+      if (have !== want) {
         await db
           .update(matchups)
-          .set({
-            winnerUserId: want,
-            resolvedVia: "auto",
-            resolvedAt: new Date(),
-          })
+          .set(
+            sideIsA
+              ? { playerAUserId: want }
+              : { playerBUserId: want }
+          )
           .where(eq(matchups.id, next.id));
+        changed = true;
+      }
+
+      // Auto-resolve `next` if it now has only one filled side AND the OTHER
+      // feeder either doesn't exist (round has odd count → tail bye) or is a
+      // genuine empty bye matchup itself.
+      const newA = sideIsA ? want : next.playerAUserId;
+      const newB = sideIsA ? next.playerBUserId : want;
+      const onlyOneSide = (newA && !newB) || (!newA && newB);
+      if (next.roundIndex >= 2 && onlyOneSide && !next.winnerUserId) {
+        const otherFeederSlot = nextSlot * 2 + (sideIsA ? 1 : 0);
+        const otherFeeder = byKey.get(
+          `${m.roundIndex}:${otherFeederSlot}`
+        );
+        const otherFeederMissing = !otherFeeder;
+        const otherFeederIsEmptyBye =
+          !!otherFeeder &&
+          otherFeeder.winnerUserId === null &&
+          !otherFeeder.playerAUserId &&
+          !otherFeeder.playerBUserId;
+        if (otherFeederMissing || otherFeederIsEmptyBye) {
+          await db
+            .update(matchups)
+            .set({
+              winnerUserId: want,
+              resolvedVia: "auto",
+              resolvedAt: new Date(),
+            })
+            .where(eq(matchups.id, next.id));
+          changed = true;
+        }
       }
     }
+    if (!changed) break;
   }
 }
 

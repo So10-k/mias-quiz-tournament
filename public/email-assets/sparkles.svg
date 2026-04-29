@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 120" width="480" height="120" role="img" aria-label="Floating sparkles">
+  <g>
+    <g transform="translate(60 60)">
+      <animateTransform attributeName="transform" type="translate" values="60 80; 60 30; 60 80" keyTimes="0; 0.5; 1" dur="3.2s" repeatCount="indefinite"/>
+      <g>
+        <animate attributeName="opacity" values="0;1;0" dur="3.2s" repeatCount="indefinite"/>
+        <path d="M0 -14 L4 -4 L14 0 L4 4 L0 14 L-4 4 L-14 0 L-4 -4 Z" fill="#FFD93D" stroke="#1B2A4E" stroke-width="2"/>
+      </g>
+    </g>
+    <g transform="translate(160 70)">
+      <animateTransform attributeName="transform" type="translate" values="160 90; 160 30; 160 90" keyTimes="0; 0.5; 1" dur="2.8s" begin="0.4s" repeatCount="indefinite"/>
+      <g>
+        <animate attributeName="opacity" values="0;1;0" dur="2.8s" begin="0.4s" repeatCount="indefinite"/>
+        <path d="M0 -10 L3 -3 L10 0 L3 3 L0 10 L-3 3 L-10 0 L-3 -3 Z" fill="#FF6B9D" stroke="#1B2A4E" stroke-width="2"/>
+      </g>
+    </g>
+    <g transform="translate(260 60)">
+      <animateTransform attributeName="transform" type="translate" values="260 80; 260 20; 260 80" keyTimes="0; 0.5; 1" dur="3.6s" begin="0.8s" repeatCount="indefinite"/>
+      <g>
+        <animate attributeName="opacity" values="0;1;0" dur="3.6s" begin="0.8s" repeatCount="indefinite"/>
+        <path d="M0 -16 L5 -5 L16 0 L5 5 L0 16 L-5 5 L-16 0 L-5 -5 Z" fill="#7DD87D" stroke="#1B2A4E" stroke-width="2"/>
+      </g>
+    </g>
+    <g transform="translate(360 70)">
+      <animateTransform attributeName="transform" type="translate" values="360 90; 360 30; 360 90" keyTimes="0; 0.5; 1" dur="3.0s" begin="1.2s" repeatCount="indefinite"/>
+      <g>
+        <animate attributeName="opacity" values="0;1;0" dur="3.0s" begin="1.2s" repeatCount="indefinite"/>
+        <path d="M0 -12 L4 -3 L12 0 L4 3 L0 12 L-4 3 L-12 0 L-4 -3 Z" fill="#87CEEB" stroke="#1B2A4E" stroke-width="2"/>
+      </g>
+    </g>
+    <g transform="translate(440 60)">
+      <animateTransform attributeName="transform" type="translate" values="440 80; 440 20; 440 80" keyTimes="0; 0.5; 1" dur="3.4s" begin="1.6s" repeatCount="indefinite"/>
+      <g>
+        <animate attributeName="opacity" values="0;1;0" dur="3.4s" begin="1.6s" repeatCount="indefinite"/>
+        <path d="M0 -14 L4 -4 L14 0 L4 4 L0 14 L-4 4 L-14 0 L-4 -4 Z" fill="#FFD93D" stroke="#1B2A4E" stroke-width="2"/>
+      </g>
+    </g>
+  </g>
+</svg>
