@@ -385,19 +385,26 @@ export async function autoResolveByScore(
     .limit(1);
   if (!quizRound) return;
 
+  // A single chapter quiz resolves matchups across BOTH brackets that are
+  // played simultaneously:
+  //   • main bracket roundIndex = chapterNumber
+  //   • losers bracket roundIndex = chapterNumber - 1
+  // i.e. the chapter that runs main R2 also runs LB R1, chapter 3 runs
+  // main R3 + LB R2, etc. There's no LB round during chapter 1 (LB R1
+  // doesn't exist until main R1 has produced losers).
   const ms = await db
     .select()
     .from(matchups)
-    .where(
-      and(
-        eq(matchups.tournamentId, tournamentId),
-        eq(matchups.roundIndex, roundIndex)
-      )
-    );
-  if (ms.length === 0) return;
+    .where(eq(matchups.tournamentId, tournamentId));
+  const inThisChapter = ms.filter(
+    (m) =>
+      (m.bracket === "main" && m.roundIndex === roundIndex) ||
+      (m.bracket === "losers" && m.roundIndex === roundIndex - 1)
+  );
+  if (inThisChapter.length === 0) return;
 
   const userIds = new Set<string>();
-  for (const m of ms) {
+  for (const m of inThisChapter) {
     if (m.playerAUserId) userIds.add(m.playerAUserId);
     if (m.playerBUserId) userIds.add(m.playerBUserId);
   }
@@ -417,7 +424,7 @@ export async function autoResolveByScore(
     if (a.submittedAt) scoreFor.set(a.userId, Number(a.score ?? "0"));
   }
 
-  for (const m of ms) {
+  for (const m of inThisChapter) {
     if (m.resolvedVia === "manual") continue;
     if (!m.playerAUserId || !m.playerBUserId) continue;
     const sa = scoreFor.get(m.playerAUserId) ?? 0;

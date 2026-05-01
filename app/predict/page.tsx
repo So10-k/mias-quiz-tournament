@@ -12,6 +12,8 @@ import {
   getMyPredictions,
   getPredictionsSettings,
   pointValueFor,
+  cascadeBracket,
+  bracketByeSet,
 } from "@/lib/predictions";
 
 export const dynamic = "force-dynamic";
@@ -36,22 +38,46 @@ export default async function PredictPage() {
 
   // Predictions map for the BracketView overlay (matchupId → picked userId).
   const predictionsByMatchup = new Map<string, string>();
+  const picksRecord: Record<string, string> = {};
   for (const [mid, p] of myPreds) {
     predictionsByMatchup.set(mid, p.predictedWinnerUserId);
+    picksRecord[mid] = p.predictedWinnerUserId;
   }
 
   // Score / progress.
   const allMatchups = [...mainRounds, ...losersRounds].flatMap(
     (r) => r.matchups
   );
+  // Cascade derives effective per-user player IDs for every matchup so
+  // the BracketView can show your picks propagated through R2+ slots.
+  const cascadeInput = allMatchups.map((m) => ({
+    id: m.id,
+    bracket: m.bracket,
+    roundIndex: m.roundIndex,
+    slot: m.slot,
+    playerAUserId: m.playerAUserId,
+    playerBUserId: m.playerBUserId,
+    winnerUserId: m.winnerUserId,
+    loserNextMatchupId: m.loserNextMatchupId,
+    loserNextSide: m.loserNextSide,
+  }));
+  const cascade = cascadeBracket(cascadeInput, picksRecord);
+  const byeSet = bracketByeSet(cascadeInput);
   const decided = allMatchups.filter((m) => !!m.winnerUserId);
-  const predictableNow = allMatchups.filter(
-    (m) =>
-      !m.winnerUserId &&
-      !m.predictionsLockedAt &&
-      !!m.playerAUserId &&
-      !!m.playerBUserId
+  // Total pickable slots in this tournament's prediction game (excluding
+  // structural byes and host-locked matchups).
+  const totalPickable = allMatchups.filter(
+    (m) => !m.predictionsLockedAt && !byeSet.has(m.id)
   ).length;
+  // Pickable RIGHT NOW = both effective sides (after cascade) seated and not
+  // yet decided.
+  const pickableNow = allMatchups.filter((m) => {
+    if (m.winnerUserId) return false;
+    if (m.predictionsLockedAt) return false;
+    if (byeSet.has(m.id)) return false;
+    const eff = cascade.get(m.id);
+    return !!eff?.a && !!eff?.b;
+  }).length;
   let myPoints = 0;
   let myCorrect = 0;
   let myResolved = 0;
@@ -95,18 +121,19 @@ export default async function PredictPage() {
               <p className="font-display text-4xl text-navy leading-none">
                 {predictionsByMatchup.size}{" "}
                 <span className="text-navy-soft text-2xl">
-                  / {predictableNow + myResolved} picks made
+                  / {totalPickable} picks made
                 </span>
               </p>
               <p className="font-body text-sm text-navy-soft">
-                Score so far: <strong>{myPoints} pts</strong> ·{" "}
+                {pickableNow} pickable now · score so far:{" "}
+                <strong>{myPoints} pts</strong> ·{" "}
                 {myCorrect} correct of {myResolved} resolved
               </p>
               <Link
                 href="/predict/play"
                 className="pop pop-coral text-xl mt-1"
               >
-                {predictionsByMatchup.size >= predictableNow + myResolved
+                {predictionsByMatchup.size >= totalPickable
                   ? "🎬 Tweak your picks"
                   : "🎬 Continue picking"}
               </Link>
@@ -143,6 +170,7 @@ export default async function PredictPage() {
             users={users}
             championId={null}
             predictions={predictionsByMatchup}
+            cascade={cascade}
           />
         </div>
 
@@ -156,6 +184,7 @@ export default async function PredictPage() {
               users={users}
               championId={null}
               predictions={predictionsByMatchup}
+              cascade={cascade}
             />
           </div>
         ) : null}
