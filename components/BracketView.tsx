@@ -2,7 +2,10 @@
 // display; the host gets edit affordances via separate forms passed in.
 import { type ReactNode } from "react";
 import type { BracketRound, Matchup } from "@/lib/bracket";
-import { bracketByeSet, type CascadeMap } from "@/lib/predictions";
+// Pure helpers — keep this import off "@/lib/predictions" so that
+// BracketView (rendered inside RSC trees that also include client
+// components) doesn't drag db/index.ts into the client bundle.
+import { bracketByeSet, type CascadeMap } from "@/lib/predict-cascade";
 
 type Props = {
   rounds: BracketRound[];
