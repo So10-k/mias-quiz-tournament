@@ -77,21 +77,33 @@ async function main() {
     return u?.name ?? u?.email ?? id.slice(0, 6) + "…";
   };
 
-  let curRound = -1;
-  for (const m of matchups) {
-    if (m.roundIndex !== curRound) {
-      curRound = m.roundIndex;
-      console.log(`\n── Round ${curRound} ──`);
-    }
-    const a = nameOf(m.playerAUserId).padEnd(22);
-    const b = nameOf(m.playerBUserId).padEnd(22);
-    const winner = m.winnerUserId
-      ? `→ ${nameOf(m.winnerUserId)} (${m.resolvedVia ?? "?"})`
-      : "(undecided)";
+  for (const bracket of ["main", "losers"] as const) {
+    const subset = matchups.filter((m) => m.bracket === bracket);
+    if (subset.length === 0) continue;
     console.log(
-      `  slot ${String(m.slot).padStart(2)}  ${a} vs ${b}  ${winner}`
+      `\n══════════ ${bracket === "main" ? "🏆 MAIN BRACKET" : "💔 LOSERS BRACKET"} ══════════`
     );
-    console.log(`     matchupId: ${m.id}`);
+    let curRound = -1;
+    for (const m of subset) {
+      if (m.roundIndex !== curRound) {
+        curRound = m.roundIndex;
+        console.log(`\n── Round ${curRound} ──`);
+      }
+      const a = nameOf(m.playerAUserId).padEnd(22);
+      const b = nameOf(m.playerBUserId).padEnd(22);
+      const winner = m.winnerUserId
+        ? `→ ${nameOf(m.winnerUserId)} (${m.resolvedVia ?? "?"})`
+        : "(undecided)";
+      console.log(
+        `  slot ${String(m.slot).padStart(2)}  ${a} vs ${b}  ${winner}`
+      );
+      console.log(`     matchupId: ${m.id}`);
+      if (bracket === "main" && m.loserNextMatchupId) {
+        console.log(
+          `     loser → ${m.loserNextMatchupId.slice(0, 6)}…  (LB side ${m.loserNextSide ?? "?"})`
+        );
+      }
+    }
   }
   console.log("");
 

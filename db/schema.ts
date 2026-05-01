@@ -181,6 +181,9 @@ export const rounds = pgTable("rounds", {
   // Only the two players in that matchup can access the round; it's hidden
   // from public practice listings.
   tiebreakerMatchupId: text("tiebreaker_matchup_id"),
+  // When set, this round resolves a specific losers-bracket matchup
+  // (similar gating to tiebreakerMatchupId).
+  losersMatchupId: text("losers_matchup_id"),
   opensAt: timestamp("opens_at", { mode: "date" }),
   closesAt: timestamp("closes_at", { mode: "date" }),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
@@ -350,7 +353,9 @@ export const matchups = pgTable(
     tournamentId: text("tournament_id")
       .notNull()
       .references(() => tournaments.id, { onDelete: "cascade" }),
-    // 1 = first bracket round (the most players), 2 = next, etc.
+    // 'main' or 'losers'. Default 'main' keeps existing rows working.
+    bracket: text("bracket").notNull().default("main"),
+    // 1 = first round (most players), 2 = next, etc.
     roundIndex: integer("round_index").notNull(),
     // 0..N-1 within the round, top-to-bottom in bracket display order.
     slot: integer("slot").notNull(),
@@ -363,12 +368,22 @@ export const matchups = pgTable(
     winnerUserId: text("winner_user_id").references(() => users.id, {
       onDelete: "set null",
     }),
+    // For main-bracket R1 matchups in double-elim mode: where the *loser*
+    // gets routed to (a losers-bracket matchup) and which side. Null on
+    // either = loser is just out.
+    loserNextMatchupId: text("loser_next_matchup_id"),
+    loserNextSide: text("loser_next_side"), // 'a' | 'b'
+    // Prediction-game lock. When set, no further predictions can be made
+    // or edited for this matchup. Auto-set when the matchup resolves; the
+    // host can also lock manually from /host/predictions.
+    predictionsLockedAt: timestamp("predictions_locked_at", { mode: "date" }),
     resolvedVia: matchupResolver("resolved_via"),
     resolvedAt: timestamp("resolved_at", { mode: "date" }),
   },
   (t) => ({
-    uniqSlot: uniqueIndex("matchups_round_slot_idx").on(
+    uniqSlot: uniqueIndex("matchups_bracket_round_slot_idx").on(
       t.tournamentId,
+      t.bracket,
       t.roundIndex,
       t.slot
     ),
@@ -386,6 +401,103 @@ export const strikes = pgTable("strikes", {
   reason: strikeReason("reason").notNull(),
   givenAt: timestamp("given_at", { mode: "date" }).notNull().defaultNow(),
 });
+
+// ─── email tracking + Miamail ──────────────────────────────────────────
+// Every outgoing email is persisted so recipients can read their own
+// inbox in /miamail and the host can see open/click analytics.
+export const emailSends = pgTable("email_sends", {
+  id: text("id").primaryKey(),
+  recipientEmail: text("recipient_email").notNull(),
+  recipientUserId: text("recipient_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  subject: text("subject").notNull(),
+  htmlBody: text("html_body").notNull(),
+  textBody: text("text_body").notNull(),
+  templateId: text("template_id"),
+  sendBatchId: text("send_batch_id"),
+  provider: text("provider").notNull(),
+  sentAt: timestamp("sent_at", { mode: "date" }).notNull().defaultNow(),
+  openedAt: timestamp("opened_at", { mode: "date" }),
+});
+
+export const emailClicks = pgTable("email_clicks", {
+  id: text("id").primaryKey(),
+  sendId: text("send_id")
+    .notNull()
+    .references(() => emailSends.id, { onDelete: "cascade" }),
+  originalUrl: text("original_url").notNull(),
+  clickedAt: timestamp("clicked_at", { mode: "date" }).notNull().defaultNow(),
+  userAgent: text("user_agent"),
+  ip: text("ip"),
+});
+
+// ─── staff portal (Duo-backed) ─────────────────────────────────────────
+// Separate from `users` — staff identities are provisioned via Duo SSO and
+// don't share rows with tournament players, even if the email matches.
+export const staffUsers = pgTable("staff_users", {
+  id: text("id").primaryKey(),
+  email: text("email").notNull().unique(),
+  name: text("name"),
+  duoSubject: text("duo_subject"),
+  role: text("role").notNull().default("staff"),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  lastLoginAt: timestamp("last_login_at", { mode: "date" }),
+});
+
+export const staffSessions = pgTable("staff_sessions", {
+  sessionToken: text("session_token").primaryKey(),
+  staffUserId: text("staff_user_id")
+    .notNull()
+    .references(() => staffUsers.id, { onDelete: "cascade" }),
+  expires: timestamp("expires", { mode: "date" }).notNull(),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+// Audit log of staff actions — feeds the real-time staff dashboard.
+export const staffActions = pgTable("staff_actions", {
+  id: text("id").primaryKey(),
+  staffUserId: text("staff_user_id").references(() => staffUsers.id, {
+    onDelete: "set null",
+  }),
+  staffEmail: text("staff_email").notNull(),
+  action: text("action").notNull(),
+  target: text("target"),
+  details: jsonb("details"),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+// ─── prediction game ───────────────────────────────────────────────────
+// March-madness style: signed-in users predict winners of undecided
+// matchups for points. Per-matchup edits are allowed until the matchup is
+// locked (host action, or auto when the matchup resolves).
+export const predictions = pgTable(
+  "predictions",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    matchupId: text("matchup_id")
+      .notNull()
+      .references(() => matchups.id, { onDelete: "cascade" }),
+    predictedWinnerUserId: text("predicted_winner_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { mode: "date" })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    uniqUserMatchup: uniqueIndex("predictions_user_matchup_idx").on(
+      t.userId,
+      t.matchupId
+    ),
+  })
+);
 
 // ─── relations ──────────────────────────────────────────────────────────────
 

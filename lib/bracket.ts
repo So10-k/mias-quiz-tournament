@@ -30,11 +30,21 @@ export type BracketRound = {
   matchups: Matchup[];
 };
 
-export async function getBracket(tournamentId: string): Promise<BracketRound[]> {
+export type BracketKind = "main" | "losers";
+
+export async function getBracket(
+  tournamentId: string,
+  bracket: BracketKind = "main"
+): Promise<BracketRound[]> {
   const rows = await db
     .select()
     .from(matchups)
-    .where(eq(matchups.tournamentId, tournamentId))
+    .where(
+      and(
+        eq(matchups.tournamentId, tournamentId),
+        eq(matchups.bracket, bracket)
+      )
+    )
     .orderBy(asc(matchups.roundIndex), asc(matchups.slot));
   const rounds: BracketRound[] = [];
   for (const m of rows) {
@@ -161,15 +171,76 @@ export async function propagateWinners(tournamentId: string) {
       .from(matchups)
       .where(eq(matchups.tournamentId, tournamentId))
       .orderBy(asc(matchups.roundIndex), asc(matchups.slot));
+    // Key includes the bracket so main + losers don't collide on slot.
     const byKey = new Map<string, Matchup>();
-    for (const m of all) byKey.set(`${m.roundIndex}:${m.slot}`, m);
+    for (const m of all) byKey.set(`${m.bracket}:${m.roundIndex}:${m.slot}`, m);
+    const byId = new Map<string, Matchup>(all.map((m) => [m.id, m]));
 
     let changed = false;
+
+    // Sweep LB R1 BYEs: if a losers-bracket round-1 matchup has exactly
+    // one player and no winner, the lone player auto-advances. This is
+    // the case when a late-added main R1 matchup routes its loser into
+    // a freshly-created LB R1 slot with no opponent.
+    for (const m of all) {
+      if (m.bracket !== "losers" || m.roundIndex !== 1) continue;
+      if (m.winnerUserId) continue;
+      const onlyA = !!m.playerAUserId && !m.playerBUserId;
+      const onlyB = !!m.playerBUserId && !m.playerAUserId;
+      if (!onlyA && !onlyB) continue;
+      const winner = m.playerAUserId ?? m.playerBUserId!;
+      await db
+        .update(matchups)
+        .set({
+          winnerUserId: winner,
+          resolvedVia: "auto",
+          resolvedAt: new Date(),
+        })
+        .where(eq(matchups.id, m.id));
+      changed = true;
+    }
+
     for (const m of all) {
       if (!m.winnerUserId) continue;
+
+      // ── Loser routing: main R1 → losers bracket. Only on the first
+      // bracket round (matches the user's "lose in R1 = drop to losers"
+      // rule). R2+ losers are just out.
+      if (
+        m.bracket === "main" &&
+        m.roundIndex === 1 &&
+        m.loserNextMatchupId &&
+        m.loserNextSide
+      ) {
+        const loser =
+          m.winnerUserId === m.playerAUserId
+            ? m.playerBUserId
+            : m.winnerUserId === m.playerBUserId
+            ? m.playerAUserId
+            : null;
+        if (loser) {
+          const lb = byId.get(m.loserNextMatchupId);
+          if (lb) {
+            const sideIsA = m.loserNextSide === "a";
+            const have = sideIsA ? lb.playerAUserId : lb.playerBUserId;
+            if (have !== loser) {
+              await db
+                .update(matchups)
+                .set(
+                  sideIsA
+                    ? { playerAUserId: loser }
+                    : { playerBUserId: loser }
+                )
+                .where(eq(matchups.id, lb.id));
+              changed = true;
+            }
+          }
+        }
+      }
+
       const nextRound = m.roundIndex + 1;
       const nextSlot = Math.floor(m.slot / 2);
-      const next = byKey.get(`${nextRound}:${nextSlot}`);
+      const next = byKey.get(`${m.bracket}:${nextRound}:${nextSlot}`);
       if (!next) continue;
       // The "A" position of the next matchup is filled by the lower-numbered
       // slot of this round (m.slot even -> A, odd -> B).
@@ -197,7 +268,7 @@ export async function propagateWinners(tournamentId: string) {
       if (next.roundIndex >= 2 && onlyOneSide && !next.winnerUserId) {
         const otherFeederSlot = nextSlot * 2 + (sideIsA ? 1 : 0);
         const otherFeeder = byKey.get(
-          `${m.roundIndex}:${otherFeederSlot}`
+          `${m.bracket}:${m.roundIndex}:${otherFeederSlot}`
         );
         const otherFeederMissing = !otherFeeder;
         const otherFeederIsEmptyBye =

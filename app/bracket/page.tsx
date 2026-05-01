@@ -46,9 +46,13 @@ export default async function BracketPage() {
     );
   }
 
-  const rounds = await getBracket(t.id);
+  const [mainRounds, losersRounds] = await Promise.all([
+    getBracket(t.id, "main"),
+    getBracket(t.id, "losers"),
+  ]);
   const users = await getBracketUsers(t.id);
   const championId = await getBracketChampionId(t.id);
+  const hasLosers = losersRounds.length > 0;
   const theme = await getSiteTheme();
 
   if (theme === "arcade") {
@@ -57,7 +61,7 @@ export default async function BracketPage() {
         <ArcadeTitle
           eyebrow="Live Tournament"
           title="The Bracket"
-          subtitle="Climb the ladder. Stay alive. Take the crown."
+          subtitle="Win twice or play your way back through the losers bracket."
           links={[
             { href: "/play", label: "▶ Play" },
             { href: "/bracket", label: "Bracket", active: true },
@@ -65,7 +69,35 @@ export default async function BracketPage() {
             { href: "/standings", label: "Standings" },
           ]}
         />
-        <ArcadeBracket rounds={rounds} users={users} championId={championId} />
+        <ArcadeBracket
+          rounds={mainRounds}
+          users={users}
+          championId={championId}
+        />
+        {hasLosers ? (
+          <>
+            <div className="px-4 mt-6">
+              <div
+                style={{
+                  textAlign: "center",
+                  fontFamily: "Fredoka, sans-serif",
+                  fontWeight: 700,
+                  letterSpacing: "0.2em",
+                  textTransform: "uppercase",
+                  color: "#FF2D75",
+                  fontSize: 14,
+                }}
+              >
+                ⚔️ Losers bracket — last chance
+              </div>
+            </div>
+            <ArcadeBracket
+              rounds={losersRounds}
+              users={users}
+              championId={null}
+            />
+          </>
+        ) : null}
       </ArcadeStage>
     );
   }
@@ -88,8 +120,27 @@ export default async function BracketPage() {
         </div>
 
         <div className="card px-5 py-5">
-          <BracketView rounds={rounds} users={users} championId={championId} />
+          <h2 className="font-display text-xl text-navy mb-3">
+            🏆 Main bracket
+          </h2>
+          <BracketView
+            rounds={mainRounds}
+            users={users}
+            championId={championId}
+          />
         </div>
+        {hasLosers ? (
+          <div className="card px-5 py-5">
+            <h2 className="font-display text-xl text-coral-deep mb-3">
+              💔 Losers bracket — round-1 fallers&rsquo; second chance
+            </h2>
+            <BracketView
+              rounds={losersRounds}
+              users={users}
+              championId={null}
+            />
+          </div>
+        ) : null}
       </div>
     </Stage>
   );

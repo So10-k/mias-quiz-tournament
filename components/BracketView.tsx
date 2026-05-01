@@ -3,12 +3,36 @@
 import { type ReactNode } from "react";
 import type { BracketRound, Matchup } from "@/lib/bracket";
 
+// Mark a matchup as a structural BYE when one of its R-1 feeders doesn't
+// exist (odd-count tail-bye). Cosmetic only — propagateWinners auto-resolves
+// these in the engine; this just makes the bracket card honest about it
+// instead of showing two empty rows that "feel broken."
+function buildByeSet(rounds: BracketRound[]): Set<string> {
+  const all: Matchup[] = rounds.flatMap((r) => r.matchups);
+  const byKey = new Map<string, Matchup>();
+  for (const m of all) byKey.set(`${m.bracket}:${m.roundIndex}:${m.slot}`, m);
+  const out = new Set<string>();
+  for (const m of all) {
+    if (m.winnerUserId) continue;
+    if (m.playerAUserId && m.playerBUserId) continue;
+    if (m.roundIndex === 1) continue; // R1 bye/single-side handled by data
+    const fA = byKey.get(`${m.bracket}:${m.roundIndex - 1}:${m.slot * 2}`);
+    const fB = byKey.get(`${m.bracket}:${m.roundIndex - 1}:${m.slot * 2 + 1}`);
+    const feederCount = (fA ? 1 : 0) + (fB ? 1 : 0);
+    if (feederCount <= 1) out.add(m.id);
+  }
+  return out;
+}
+
 type Props = {
   rounds: BracketRound[];
   users: Map<string, { name: string | null; email: string | null }>;
   // Optional render slot for host controls under each matchup card.
   renderControls?: (m: Matchup) => ReactNode;
   championId?: string | null;
+  // Optional: matchupId → predicted-winner-userId. When supplied, the
+  // matching slot in each matchup gets a coral pick highlight + ★.
+  predictions?: Map<string, string>;
 };
 
 const ROUND_LABELS = (n: number, total: number) => {
@@ -19,7 +43,13 @@ const ROUND_LABELS = (n: number, total: number) => {
   return `Round ${n}`;
 };
 
-export function BracketView({ rounds, users, renderControls, championId }: Props) {
+export function BracketView({
+  rounds,
+  users,
+  renderControls,
+  championId,
+  predictions,
+}: Props) {
   if (rounds.length === 0) {
     return (
       <div className="card px-7 py-7 text-center">
@@ -35,6 +65,7 @@ export function BracketView({ rounds, users, renderControls, championId }: Props
   }
 
   const total = rounds.length;
+  const byeIds = buildByeSet(rounds);
   const labelFor = (id: string | null) => {
     if (!id) return null;
     const u = users.get(id);
@@ -66,6 +97,8 @@ export function BracketView({ rounds, users, renderControls, championId }: Props
                   championId={championId ?? null}
                   isFinal={r.roundIndex === total}
                   controls={renderControls ? renderControls(m) : null}
+                  predictedSideId={predictions?.get(m.id) ?? null}
+                  isBye={byeIds.has(m.id)}
                 />
               ))}
             </div>
@@ -82,36 +115,67 @@ function BracketMatchup({
   championId,
   isFinal,
   controls,
+  predictedSideId,
+  isBye,
 }: {
   m: Matchup;
   labelFor: (id: string | null) => string | null;
   championId: string | null;
   isFinal: boolean;
   controls: ReactNode;
+  predictedSideId: string | null;
+  isBye: boolean;
 }) {
   const a = labelFor(m.playerAUserId);
   const b = labelFor(m.playerBUserId);
+  // For a structural bye, the empty side is labeled "BYE" so the card
+  // reads as "auto-advance" instead of two ambiguous "—" rows. The seated
+  // side keeps its real name (or stays "—" if neither side has cascaded
+  // upstream yet).
+  const aLabel = a ?? (isBye && !m.playerAUserId && m.playerBUserId ? "BYE" : "—");
+  const bLabel = b ?? (isBye && !m.playerBUserId && m.playerAUserId ? "BYE" : "—");
+  // Both sides empty + structural bye → the round n+1 cascade has not yet
+  // delivered the lone-feeder winner here. Show as "(awaiting feeder)" so it's
+  // clear there's no opponent ever coming.
+  const bothEmpty = !m.playerAUserId && !m.playerBUserId;
   const winnerSide =
     m.winnerUserId && m.winnerUserId === m.playerAUserId
       ? "a"
       : m.winnerUserId && m.winnerUserId === m.playerBUserId
       ? "b"
       : null;
+  const pickedSide =
+    predictedSideId && m.playerAUserId === predictedSideId
+      ? "a"
+      : predictedSideId && m.playerBUserId === predictedSideId
+      ? "b"
+      : null;
 
   return (
     <div className="card-sm bg-white px-3 py-3 flex flex-col gap-1 relative">
+      {isBye && bothEmpty ? (
+        <div className="absolute -top-2 left-2 px-2 py-0.5 rounded-md border-2 border-navy bg-sun text-navy text-xs font-display">
+          BYE · awaiting feeder
+        </div>
+      ) : isBye ? (
+        <div className="absolute -top-2 left-2 px-2 py-0.5 rounded-md border-2 border-navy bg-sun text-navy text-xs font-display">
+          BYE
+        </div>
+      ) : null}
       <Slot
-        label={a ?? "—"}
+        label={aLabel}
         empty={!a}
         won={winnerSide === "a"}
         lost={!!winnerSide && winnerSide !== "a"}
+        picked={pickedSide === "a" && !winnerSide}
       />
       <div className="font-display text-xs text-navy-soft text-center">vs</div>
       <Slot
-        label={b ?? "—"}
+        label={bLabel}
         empty={!b}
         won={winnerSide === "b"}
         lost={!!winnerSide && winnerSide !== "b"}
+        picked={pickedSide === "b" && !winnerSide}
       />
       {m.resolvedVia ? (
         <div
@@ -143,11 +207,13 @@ function Slot({
   empty,
   won,
   lost,
+  picked,
 }: {
   label: string;
   empty: boolean;
   won: boolean;
   lost: boolean;
+  picked?: boolean;
 }) {
   return (
     <div
@@ -159,9 +225,12 @@ function Slot({
           ? "bg-grass text-white"
           : lost
           ? "bg-coral-deep text-white opacity-80 line-through"
+          : picked
+          ? "bg-coral text-white"
           : "bg-white text-navy")
       }
     >
+      {picked ? "★ " : ""}
       {label}
     </div>
   );
