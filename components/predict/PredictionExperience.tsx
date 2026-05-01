@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useTransition, useRef } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { submitPredictionAction } from "@/app/predict/actions";
+import { bracketByeSet } from "@/lib/predictions";
 
 // ─── types ────────────────────────────────────────────────────────────
 type BracketKind = "main" | "losers";
@@ -211,70 +212,12 @@ export function PredictionExperience({
     [matchups, predictions]
   );
 
-  // Structural bye check. Mirrors lib/predictions.ts isByeMatchup.
-  // Distinguishes:
-  //   • real match            (both sides seated)             → not bye
-  //   • already won           (winnerUserId set)              → not bye
-  //   • R1 single-side        (losers bracket: only if no main loser routes
-  //                            into the missing side)         → bye
-  //   • R1 main single-side                                   → bye
-  //   • R2+ with one or zero feeders in R-1 (tail bye)        → bye
+  // Structural bye check — shared with the server-side BracketView so the
+  // two views agree on what "BYE" means. See lib/predictions.ts/bracketByeSet.
   const byeMap = useMemo(() => {
+    const set = bracketByeSet(matchups);
     const out = new Map<string, boolean>();
-    for (const m of matchups) {
-      if (m.winnerUserId) {
-        out.set(m.id, false);
-        continue;
-      }
-      const aSeated = !!m.playerAUserId;
-      const bSeated = !!m.playerBUserId;
-      if (aSeated && bSeated) {
-        out.set(m.id, false);
-        continue;
-      }
-      if (m.roundIndex === 1) {
-        if (m.bracket === "losers") {
-          if (!aSeated && !bSeated) {
-            const willFillEither = matchups.some(
-              (x) =>
-                x.bracket === "main" &&
-                x.loserNextMatchupId === m.id
-            );
-            out.set(m.id, !willFillEither);
-          } else {
-            const missingSide: "a" | "b" = aSeated ? "b" : "a";
-            const willFill = matchups.some(
-              (x) =>
-                x.bracket === "main" &&
-                x.loserNextMatchupId === m.id &&
-                x.loserNextSide === missingSide
-            );
-            out.set(m.id, !willFill);
-          }
-        } else {
-          // Main R1: any single-side matchup is a bye, both-empty is dead.
-          out.set(m.id, true);
-        }
-        continue;
-      }
-      // R2+: count R-1 feeders by slot.
-      const slotA = m.slot * 2;
-      const slotB = m.slot * 2 + 1;
-      const fA = matchups.find(
-        (x) =>
-          x.bracket === m.bracket &&
-          x.roundIndex === m.roundIndex - 1 &&
-          x.slot === slotA
-      );
-      const fB = matchups.find(
-        (x) =>
-          x.bracket === m.bracket &&
-          x.roundIndex === m.roundIndex - 1 &&
-          x.slot === slotB
-      );
-      const feederCount = (fA ? 1 : 0) + (fB ? 1 : 0);
-      out.set(m.id, feederCount <= 1);
-    }
+    for (const m of matchups) out.set(m.id, set.has(m.id));
     return out;
   }, [matchups]);
 
@@ -363,15 +306,22 @@ export function PredictionExperience({
   }
 
   const otherBracket: BracketKind = bracket === "main" ? "losers" : "main";
-  const totalPicked = focusOrder.filter(
-    (m) => predictions[m.id]
+  // Universe = matchups in this branch that are real predictions (not byes,
+  // not host-locked). Numerator = matchups in that universe where the user
+  // either has a saved pick OR the matchup is already decided.
+  const universe = focusOrder.filter(
+    (m) => !byeMap.get(m.id) && !m.predictionsLockedAt
+  );
+  const totalPicked = universe.filter(
+    (m) => predictions[m.id] || m.winnerUserId
   ).length;
-  const totalPredictable = focusOrder.filter(
+  const totalSlots = universe.length;
+  // Pickable RIGHT NOW = both cascade sides seated and not yet decided/locked.
+  const pickableNow = universe.filter(
     (m) =>
       !m.winnerUserId &&
-      !m.predictionsLockedAt &&
-      cascadeMap.get(m.id)?.a &&
-      cascadeMap.get(m.id)?.b
+      !!cascadeMap.get(m.id)?.a &&
+      !!cascadeMap.get(m.id)?.b
   ).length;
 
   return (
@@ -459,7 +409,7 @@ export function PredictionExperience({
           }}
         >
           <span>
-            {totalPicked} / {totalPredictable} picked
+            {totalPicked} / {totalSlots} picked · {pickableNow} pickable now
           </span>
           {savingCount > 0 ? (
             <span style={{ color: "#FFD93D" }}>· saving…</span>
