@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1200" preserveAspectRatio="xMidYMid slice" role="img" aria-hidden="true">
+  <!-- Sky gradient mirroring the app's theme tokens (sky-1 → sky-2 → sky-3) -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#B7E5FF"/>
+      <stop offset="0.55" stop-color="#87CEEB"/>
+      <stop offset="1" stop-color="#5BA8D9"/>
+    </linearGradient>
+    <radialGradient id="sunGlow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#FFD93D" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#FFD93D" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Sky -->
+  <rect width="1920" height="1200" fill="url(#sky)"/>
+
+  <!-- Soft glow behind the sun -->
+  <circle cx="1560" cy="300" r="380" fill="url(#sunGlow)"/>
+
+  <!-- Sun: rays + face (matching components/scene/Sun.tsx) -->
+  <g transform="translate(1560 300)">
+    <!-- 12 long rays -->
+    <g stroke="#1B2A4E" stroke-width="6" stroke-linecap="round">
+      <line x1="80" y1="0" x2="180" y2="0"/>
+      <line x1="69.3" y1="40" x2="155.9" y2="90"/>
+      <line x1="40" y1="69.3" x2="90" y2="155.9"/>
+      <line x1="0" y1="80" x2="0" y2="180"/>
+      <line x1="-40" y1="69.3" x2="-90" y2="155.9"/>
+      <line x1="-69.3" y1="40" x2="-155.9" y2="90"/>
+      <line x1="-80" y1="0" x2="-180" y2="0"/>
+      <line x1="-69.3" y1="-40" x2="-155.9" y2="-90"/>
+      <line x1="-40" y1="-69.3" x2="-90" y2="-155.9"/>
+      <line x1="0" y1="-80" x2="0" y2="-180"/>
+      <line x1="40" y1="-69.3" x2="90" y2="-155.9"/>
+      <line x1="69.3" y1="-40" x2="155.9" y2="-90"/>
+    </g>
+    <!-- 12 short rays offset between -->
+    <g stroke="#1B2A4E" stroke-width="6" stroke-linecap="round">
+      <line x1="77.3" y1="20.7" x2="139.1" y2="37.3"/>
+      <line x1="56.6" y1="56.6" x2="101.8" y2="101.8"/>
+      <line x1="20.7" y1="77.3" x2="37.3" y2="139.1"/>
+      <line x1="-20.7" y1="77.3" x2="-37.3" y2="139.1"/>
+      <line x1="-56.6" y1="56.6" x2="-101.8" y2="101.8"/>
+      <line x1="-77.3" y1="20.7" x2="-139.1" y2="37.3"/>
+      <line x1="-77.3" y1="-20.7" x2="-139.1" y2="-37.3"/>
+      <line x1="-56.6" y1="-56.6" x2="-101.8" y2="-101.8"/>
+      <line x1="-20.7" y1="-77.3" x2="-37.3" y2="-139.1"/>
+      <line x1="20.7" y1="-77.3" x2="37.3" y2="-139.1"/>
+      <line x1="56.6" y1="-56.6" x2="101.8" y2="-101.8"/>
+      <line x1="77.3" y1="-20.7" x2="139.1" y2="-37.3"/>
+    </g>
+    <!-- Face -->
+    <circle cx="0" cy="0" r="128" fill="#FFD93D" stroke="#1B2A4E" stroke-width="6"/>
+    <circle cx="-40" cy="-16" r="12" fill="#1B2A4E"/>
+    <circle cx="40" cy="-16" r="12" fill="#1B2A4E"/>
+    <path d="M -44 32 Q 0 76 44 32" fill="none" stroke="#1B2A4E" stroke-width="7" stroke-linecap="round"/>
+    <circle cx="-52" cy="24" r="12" fill="#FF6B9D" opacity="0.7"/>
+    <circle cx="52" cy="24" r="12" fill="#FF6B9D" opacity="0.7"/>
+  </g>
+
+  <!-- Cloud helper: drawn 3 times at varied scale + position -->
+  <g transform="translate(120 220)">
+    <g transform="scale(1.5)">
+      <ellipse cx="55" cy="70" rx="40" ry="32" fill="#FFFFFF"/>
+      <ellipse cx="100" cy="55" rx="48" ry="40" fill="#FFFFFF"/>
+      <ellipse cx="150" cy="68" rx="38" ry="30" fill="#FFFFFF"/>
+      <ellipse cx="80" cy="78" rx="34" ry="22" fill="#FFFFFF"/>
+      <ellipse cx="130" cy="80" rx="32" ry="20" fill="#FFFFFF"/>
+      <path d="M30 78 Q22 50 60 44 Q66 22 100 22 Q140 18 152 44 Q186 46 178 80 Q190 96 158 96 L46 96 Q22 96 30 78 Z"
+            fill="none" stroke="#1B2A4E" stroke-width="3" stroke-linejoin="round"/>
+    </g>
+  </g>
+
+  <g transform="translate(560 420)">
+    <g transform="scale(1.05)">
+      <ellipse cx="55" cy="70" rx="40" ry="32" fill="#FFFFFF"/>
+      <ellipse cx="100" cy="55" rx="48" ry="40" fill="#FFFFFF"/>
+      <ellipse cx="150" cy="68" rx="38" ry="30" fill="#FFFFFF"/>
+      <ellipse cx="80" cy="78" rx="34" ry="22" fill="#FFFFFF"/>
+      <ellipse cx="130" cy="80" rx="32" ry="20" fill="#FFFFFF"/>
+      <path d="M30 78 Q22 50 60 44 Q66 22 100 22 Q140 18 152 44 Q186 46 178 80 Q190 96 158 96 L46 96 Q22 96 30 78 Z"
+            fill="none" stroke="#1B2A4E" stroke-width="3.5" stroke-linejoin="round"/>
+    </g>
+  </g>
+
+  <g transform="translate(1080 180)">
+    <g transform="scale(0.85)">
+      <ellipse cx="55" cy="70" rx="40" ry="32" fill="#FFFFFF"/>
+      <ellipse cx="100" cy="55" rx="48" ry="40" fill="#FFFFFF"/>
+      <ellipse cx="150" cy="68" rx="38" ry="30" fill="#FFFFFF"/>
+      <ellipse cx="80" cy="78" rx="34" ry="22" fill="#FFFFFF"/>
+      <ellipse cx="130" cy="80" rx="32" ry="20" fill="#FFFFFF"/>
+      <path d="M30 78 Q22 50 60 44 Q66 22 100 22 Q140 18 152 44 Q186 46 178 80 Q190 96 158 96 L46 96 Q22 96 30 78 Z"
+            fill="none" stroke="#1B2A4E" stroke-width="4" stroke-linejoin="round"/>
+    </g>
+  </g>
+
+  <!-- Birds (little M-shapes) -->
+  <g stroke="#1B2A4E" stroke-width="4" stroke-linecap="round" fill="none">
+    <path d="M 760 240 Q 780 220 800 240 Q 820 220 840 240"/>
+    <path d="M 1280 460 Q 1296 444 1312 460 Q 1328 444 1344 460"/>
+    <path d="M 240 540 Q 256 524 272 540 Q 288 524 304 540"/>
+  </g>
+
+  <!-- Rolling hill (matches Hill.tsx) -->
+  <g transform="translate(0 800)">
+    <path d="M0 160 C 320 80 640 80 960 146 C 1280 213 1600 213 1920 133 L 1920 400 L 0 400 Z"
+          fill="#7DD87D" stroke="#1B2A4E" stroke-width="5"/>
+    <path d="M0 213 C 267 173 560 173 960 220 C 1360 267 1653 260 1920 213 L 1920 400 L 0 400 Z"
+          fill="#4FB04F"/>
+
+    <!-- Flowers strewn across the hill -->
+    <g>
+      <g transform="translate(160 184)">
+        <line x1="0" y1="0" x2="0" y2="22" stroke="#4FB04F" stroke-width="3"/>
+        <circle cx="0" cy="0" r="9" fill="#FF6B9D" stroke="#1B2A4E" stroke-width="3"/>
+        <circle cx="0" cy="0" r="3" fill="#1B2A4E"/>
+      </g>
+      <g transform="translate(420 176)">
+        <line x1="0" y1="0" x2="0" y2="22" stroke="#4FB04F" stroke-width="3"/>
+        <circle cx="0" cy="0" r="9" fill="#FFD93D" stroke="#1B2A4E" stroke-width="3"/>
+        <circle cx="0" cy="0" r="3" fill="#1B2A4E"/>
+      </g>
+      <g transform="translate(740 192)">
+        <line x1="0" y1="0" x2="0" y2="22" stroke="#4FB04F" stroke-width="3"/>
+        <circle cx="0" cy="0" r="9" fill="#FFFFFF" stroke="#1B2A4E" stroke-width="3"/>
+        <circle cx="0" cy="0" r="3" fill="#1B2A4E"/>
+      </g>
+      <g transform="translate(1080 196)">
+        <line x1="0" y1="0" x2="0" y2="22" stroke="#4FB04F" stroke-width="3"/>
+        <circle cx="0" cy="0" r="9" fill="#FFD93D" stroke="#1B2A4E" stroke-width="3"/>
+        <circle cx="0" cy="0" r="3" fill="#1B2A4E"/>
+      </g>
+      <g transform="translate(1440 184)">
+        <line x1="0" y1="0" x2="0" y2="22" stroke="#4FB04F" stroke-width="3"/>
+        <circle cx="0" cy="0" r="9" fill="#FF6B9D" stroke="#1B2A4E" stroke-width="3"/>
+        <circle cx="0" cy="0" r="3" fill="#1B2A4E"/>
+      </g>
+      <g transform="translate(1720 176)">
+        <line x1="0" y1="0" x2="0" y2="22" stroke="#4FB04F" stroke-width="3"/>
+        <circle cx="0" cy="0" r="9" fill="#FFFFFF" stroke="#1B2A4E" stroke-width="3"/>
+        <circle cx="0" cy="0" r="3" fill="#1B2A4E"/>
+      </g>
+      <g transform="translate(280 200)">
+        <line x1="0" y1="0" x2="0" y2="18" stroke="#4FB04F" stroke-width="3"/>
+        <circle cx="0" cy="0" r="7" fill="#FFD93D" stroke="#1B2A4E" stroke-width="3"/>
+        <circle cx="0" cy="0" r="2" fill="#1B2A4E"/>
+      </g>
+      <g transform="translate(900 210)">
+        <line x1="0" y1="0" x2="0" y2="18" stroke="#4FB04F" stroke-width="3"/>
+        <circle cx="0" cy="0" r="7" fill="#FF6B9D" stroke="#1B2A4E" stroke-width="3"/>
+        <circle cx="0" cy="0" r="2" fill="#1B2A4E"/>
+      </g>
+      <g transform="translate(1280 212)">
+        <line x1="0" y1="0" x2="0" y2="18" stroke="#4FB04F" stroke-width="3"/>
+        <circle cx="0" cy="0" r="7" fill="#FFFFFF" stroke="#1B2A4E" stroke-width="3"/>
+        <circle cx="0" cy="0" r="2" fill="#1B2A4E"/>
+      </g>
+    </g>
+  </g>
+</svg>

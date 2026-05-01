@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Stage } from "@/components/Stage";
+import { CountdownCard } from "@/components/CountdownCard";
 import { currentUser } from "@/lib/session";
+import { getCountdown } from "@/lib/countdown-settings";
 import {
   getActiveTournament,
   getLatestTournament,
@@ -69,10 +71,18 @@ export default async function PlayHome() {
   const eliminated = !!enrollment?.eliminatedAt;
   const myActiveAttempt = activeRound ? attempts.get(activeRound.id) : null;
   const alreadyPlayed = !!myActiveAttempt?.submittedAt;
+  const countdown = await getCountdown();
 
   return (
     <Stage>
       <div className="max-w-3xl mx-auto pt-4 px-4 flex flex-col items-center gap-5">
+        {countdown.visible ? (
+          <CountdownCard
+            label={countdown.label}
+            targetIso={countdown.targetIso}
+          />
+        ) : null}
+
         {/* Status banner */}
         <div className="card-sm px-5 py-3 w-full flex flex-wrap items-center justify-between gap-3">
           <span className="font-display text-xl md:text-2xl text-navy">

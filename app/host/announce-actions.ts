@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { Resend } from "resend";
+import { sendBatch, type EmailMessage } from "@/lib/email-provider";
 import { requireUser } from "@/lib/session";
 import { db, schema } from "@/db";
 import {
@@ -445,76 +445,36 @@ export async function sendAnnouncement(
     };
   }
 
-  const apiKey = process.env.RESEND_API_KEY;
   const from =
     process.env.EMAIL_FROM ||
     "Mia's Quiz Tournament <onboarding@resend.dev>";
 
-  // Dev fallback: print, don't actually send.
-  if (!apiKey) {
-    // eslint-disable-next-line no-console
-    console.log(
-      `\n[DEV] Would send "${resolvedSubject}" to ${recipients.length} recipient(s):`
-    );
-    for (const r of recipients) {
-      // eslint-disable-next-line no-console
-      console.log(`  - ${r.email}`);
-    }
-    revalidatePath("/host");
+  // Build per-recipient messages (merge-variable substitution happens
+  // here so each person gets their own {name} etc.).
+  const messages: EmailMessage[] = recipients.map((r) => {
+    const vars = recipientMergeValues(r);
     return {
-      ok: true,
-      audience,
-      recipientCount: recipients.length,
-      sentCount: recipients.length,
-      failedCount: 0,
-      errors: [],
-      dryRun: true,
+      from,
+      to: r.email!,
+      subject: applyMergeVars(resolvedSubject, vars, false),
+      text: applyMergeVars(text, vars, false),
+      html: applyMergeVars(html, vars, true),
     };
-  }
+  });
 
-  const resend = new Resend(apiKey);
-  const errors: string[] = [];
-  let sent = 0;
-
-  // Batch up to 100 per Resend call. Per-recipient merge-variable
-  // substitution happens here so each person gets their own {name} etc.
-  const CHUNK = 90;
-  for (let i = 0; i < recipients.length; i += CHUNK) {
-    const slice = recipients.slice(i, i + CHUNK);
-    try {
-      const { data, error } = await resend.batch.send(
-        slice.map((r) => {
-          const vars = recipientMergeValues(r);
-          return {
-            from,
-            to: r.email!,
-            subject: applyMergeVars(resolvedSubject, vars, false),
-            text: applyMergeVars(text, vars, false),
-            html: applyMergeVars(html, vars, true),
-          };
-        })
-      );
-      if (error) {
-        errors.push(error.message ?? String(error));
-      } else if (data && Array.isArray((data as any).data)) {
-        sent += (data as any).data.length;
-      } else {
-        sent += slice.length;
-      }
-    } catch (e: any) {
-      errors.push(e?.message ?? String(e));
-    }
-  }
+  // Hand off to the active provider (Resend or Brevo, picked from
+  // app_settings via /host).
+  const result = await sendBatch(messages);
 
   revalidatePath("/host");
   return {
-    ok: errors.length === 0,
+    ok: result.errors.length === 0,
     audience,
     recipientCount: recipients.length,
-    sentCount: sent,
-    failedCount: Math.max(0, recipients.length - sent),
-    errors,
-    dryRun: false,
+    sentCount: result.sent,
+    failedCount: Math.max(0, recipients.length - result.sent),
+    errors: result.errors,
+    dryRun: !!result.dryRun,
   };
 }
 

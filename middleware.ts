@@ -34,8 +34,38 @@ function isBlockPassthrough(path: string) {
   );
 }
 
+// Paths the staff subdomain is allowed to expose. Anything else gets
+// redirected to /staff so the subdomain stays scoped to staff functions.
+function isStaffPath(path: string) {
+  return (
+    path.startsWith("/staff") ||
+    path.startsWith("/api/auth/staff") ||
+    path.startsWith("/api/log/") ||
+    path.startsWith("/miamail") ||
+    path.startsWith("/email-assets") ||
+    path.startsWith("/t/") ||
+    path === "/blocked" ||
+    path === "/favicon.ico" ||
+    path === "/robots.txt"
+  );
+}
+
 export async function middleware(request: NextRequest) {
   const host = request.headers.get("host") ?? "";
+
+  // ── staff.miaswebsites.art → only staff routes; everything else
+  //    redirects to /staff so the subdomain stays scoped.
+  if (host.startsWith("staff.")) {
+    const path = request.nextUrl.pathname;
+    if (!isStaffPath(path)) {
+      const u = request.nextUrl.clone();
+      u.pathname = "/staff";
+      u.search = "";
+      return NextResponse.redirect(u, 302);
+    }
+    // Skip IP block on staff sub-domain — staff need to get in.
+    return NextResponse.next();
+  }
 
   // ── .vercel.app → custom-domain bridge with auth handoff ────────────────
   if (host.includes(".vercel.app")) {

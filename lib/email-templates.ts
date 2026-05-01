@@ -740,9 +740,9 @@ const ELIMINATED_REVEAL: EmailTemplate = {
       label: "Consolation + invite to stay around",
       kind: "textarea",
       defaultValue:
-        "You're still welcome to follow the rest of the tournament — bracket, players, standings are all live for you any time. Mia would love to know you're still cheering. And there'll be a next one.",
-      rows: 4,
-      maxLength: 600,
+        "And — really importantly — this is NOT the end of the game. If you got knocked out in round 1, you'll be getting a separate email shortly with your next steps: a brand-new losers bracket has just been seeded and you're in it. Big things still to compete for. Watch your inbox.\n\nEither way, the bracket / players / standings pages stay open to you. Mia would love to know you're still around.",
+      rows: 5,
+      maxLength: 800,
     },
   ],
   render({ subject, fields }) {
@@ -1147,13 +1147,685 @@ const TIEBREAKER_QUIZ: EmailTemplate = {
   },
 };
 
+const R1_RESULTS_DOUBLE_ELIM: EmailTemplate = {
+  id: "r1-results-double-elim",
+  name: "R1 results · main winners advance, losers go to losers bracket",
+  description:
+    "Sent to everyone who played round 1. Explains the new format: R1 losers drop to a losers bracket; from R2 onward (and in losers) one loss is out. Shows BOTH bracket snapshots inline.",
+  defaultSubject: "Round 1 is in the books — your next match is set",
+  fields: [
+    {
+      key: "headline",
+      label: "Big headline",
+      kind: "text",
+      defaultValue: "Round 1 is in the books.",
+      maxLength: 120,
+    },
+    {
+      key: "intro",
+      label: "Opener",
+      kind: "textarea",
+      defaultValue:
+        "{firstName} — round 1 is wrapped. Big news on format: from here on, every loss is final. Quarterfinal+ losers are out. But round-1 fallers get one more shot — they drop to a brand-new losers bracket. Auto-seeded below.",
+      rows: 5,
+      maxLength: 1200,
+    },
+    {
+      key: "rules",
+      label: "Rules block",
+      kind: "textarea",
+      defaultValue:
+        "From now on:\n• Lose in the main bracket (quarterfinals or later) → out, no comeback.\n• Lose in the losers bracket → out.\n• Win the losers bracket → you take the consolation crown.",
+      rows: 5,
+      maxLength: 800,
+    },
+    {
+      key: "ctaUrl",
+      label: "Bracket button URL",
+      kind: "text",
+      defaultValue: "https://quiz.miaswebsites.art/bracket",
+      maxLength: 240,
+    },
+    {
+      key: "mainBracketUrl",
+      label: "Main bracket image URL",
+      kind: "text",
+      defaultValue:
+        "https://quiz.miaswebsites.art/api/bracket/snapshot.svg?bracket=main",
+      hint: "Defaults to the live snapshot endpoint, scoped to the main bracket.",
+      maxLength: 400,
+    },
+    {
+      key: "losersBracketUrl",
+      label: "Losers bracket image URL",
+      kind: "text",
+      defaultValue:
+        "https://quiz.miaswebsites.art/api/bracket/snapshot.svg?bracket=losers",
+      maxLength: 400,
+    },
+  ],
+  render({ subject, fields }) {
+    const headline = getField(this, fields, "headline");
+    const intro = getField(this, fields, "intro");
+    const rules = getField(this, fields, "rules");
+    const ctaUrl = getField(this, fields, "ctaUrl");
+    const mainBracketUrl = getField(this, fields, "mainBracketUrl");
+    const losersBracketUrl = getField(this, fields, "losersBracketUrl");
+    const finalSubject = subject.trim() || this.defaultSubject;
+
+    const text = [
+      "Mia's Quiz Tournament — Round 1 results",
+      "",
+      headline,
+      "",
+      intro,
+      "",
+      "Rules from here on:",
+      rules,
+      "",
+      `Live bracket: ${ctaUrl}`,
+      "",
+      "— Sam · Mia's Quiz Tournament",
+    ].join("\n");
+
+    const para = (s: string) =>
+      `<p style="margin:0 0 14px;font-family:Quicksand,system-ui,sans-serif;font-size:16px;line-height:1.65;color:#1B2A4E;white-space:pre-line;">${esc(
+        s
+      )}</p>`;
+
+    const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>${esc(finalSubject)}</title>
+<style>
+  @import url("https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Quicksand:wght@500;600;700&display=swap");
+</style>
+</head>
+<body style="margin:0;padding:0;background:#B7E5FF;font-family:Quicksand,system-ui,sans-serif;color:#1B2A4E;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#B7E5FF;">
+    <tr><td align="center" style="padding:32px 14px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="640" style="width:100%;max-width:640px;background:#FFFFFF;border:4px solid #1B2A4E;border-radius:28px;box-shadow:8px 8px 0 0 #1B2A4E;overflow:hidden;">
+        <tr><td style="height:8px;background:linear-gradient(90deg,#FFCC00 0%,#FF2D75 50%,#00F0FF 100%);line-height:0;font-size:0;">&nbsp;</td></tr>
+        <tr><td style="padding:30px 36px 6px 36px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+            <tr>
+              <td style="padding-right:14px;vertical-align:middle;">
+                <img src="https://quiz.miaswebsites.art/email-assets/sun.gif" width="64" height="64" alt="" style="display:block;width:64px;height:64px;"/>
+              </td>
+              <td style="vertical-align:middle;">
+                <p style="margin:0;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:22px;color:#1B2A4E;line-height:1;">Mia&rsquo;s Quiz Tournament</p>
+                <p style="margin:4px 0 0;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:13px;color:#E94B7E;letter-spacing:.06em;text-transform:uppercase;">Round 1 results</p>
+              </td>
+            </tr>
+          </table>
+          <h1 style="margin:24px 0 16px;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:34px;color:#1B2A4E;line-height:1.15;">${esc(
+            headline
+          )}</h1>
+          ${para(intro)}
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:18px 0;background:#FFF7E6;border:3px solid #1B2A4E;border-radius:16px;box-shadow:4px 4px 0 0 #1B2A4E;">
+            <tr><td style="padding:18px 22px;">
+              <p style="margin:0 0 8px;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:13px;letter-spacing:0.08em;color:#E94B7E;text-transform:uppercase;">⚔️ New rule</p>
+              ${para(rules)}
+            </td></tr>
+          </table>
+        </td></tr>
+        <tr><td style="padding:8px 24px 4px 24px;">
+          <p style="margin:0 4px 6px;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:13px;letter-spacing:0.1em;color:#1B2A4E;text-transform:uppercase;">🏆 Main bracket</p>
+          <a href="${esc(
+            ctaUrl
+          )}" style="display:block;text-decoration:none;border:3px solid #1B2A4E;border-radius:18px;background:#FFFFFF;box-shadow:4px 4px 0 0 #1B2A4E;overflow:hidden;">
+            <img src="${esc(
+              mainBracketUrl
+            )}" alt="Main bracket" style="display:block;width:100%;height:auto;background:#B7E5FF;"/>
+          </a>
+        </td></tr>
+        <tr><td style="padding:14px 24px 4px 24px;">
+          <p style="margin:0 4px 6px;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:13px;letter-spacing:0.1em;color:#E94B7E;text-transform:uppercase;">💔 Losers bracket</p>
+          <a href="${esc(
+            ctaUrl
+          )}" style="display:block;text-decoration:none;border:3px solid #1B2A4E;border-radius:18px;background:#FFFFFF;box-shadow:4px 4px 0 0 #1B2A4E;overflow:hidden;">
+            <img src="${esc(
+              losersBracketUrl
+            )}" alt="Losers bracket" style="display:block;width:100%;height:auto;background:#FFE9E9;"/>
+          </a>
+          <p style="margin:8px 4px 0;font-family:Quicksand,system-ui,sans-serif;font-size:12px;color:#3B4A7E;text-align:center;">Auto-seeded from R1 results. One loss here = out.</p>
+        </td></tr>
+        <tr><td align="center" style="padding:20px 36px 8px 36px;">
+          <a href="${esc(
+            ctaUrl
+          )}" style="display:inline-block;background:#FF6B9D;color:white;padding:16px 30px;border:3px solid #1B2A4E;border-radius:14px;box-shadow:4px 4px 0 0 #1B2A4E;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:18px;text-decoration:none;">Open the live bracket →</a>
+        </td></tr>
+        <tr><td style="padding:14px 36px 8px 36px;">
+          <div style="margin:6px 0 4px;font-family:Fredoka,Quicksand,system-ui,sans-serif;">
+            <p style="margin:0;font-weight:600;font-size:16px;color:#1B2A4E;">Good luck round 2,</p>
+            <p style="margin:6px 0 0;font-weight:700;font-size:32px;color:#E94B7E;line-height:1;">— Sam</p>
+            <p style="margin:6px 0 0;font-family:Quicksand,system-ui,sans-serif;font-size:13px;color:#3B4A7E;">Site administrator&nbsp;·&nbsp;Mia&rsquo;s Quiz Tournament</p>
+          </div>
+        </td></tr>
+        <tr><td style="padding:0;line-height:0;font-size:0;">
+          <div style="background:#7BC4A4;border-top:3px solid #1B2A4E;height:48px;">&nbsp;</div>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+
+    return { subject: finalSubject, html, text };
+  },
+};
+
+const PICKEM_HYPE: EmailTemplate = {
+  id: "pickem-hype",
+  name: "Pick'em hype · gambling-ad parody",
+  description:
+    "Over-the-top March-Madness-style hype email announcing the bracket prediction game. Gold/coral/neon vibes, fake testimonials, live bracket snapshot, mock leaderboard widget, joke fine-print at the bottom. Use to announce predictions are live.",
+  defaultSubject: "🎰 Love March Madness? You're going to LOVE this madness.",
+  fields: [
+    {
+      key: "openingHook",
+      label: "Opening hook (the lure)",
+      kind: "textarea",
+      defaultValue:
+        "Did you fill out a March Madness bracket this year? Did you watch your Final Four pick get bounced in the second round? Did you mumble \"never again\" while tipping your laptop into the trash? Good. We have an offer for you.",
+      rows: 5,
+      maxLength: 800,
+    },
+    {
+      key: "prizeLine",
+      label: "Prize line (the carrot)",
+      kind: "text",
+      defaultValue: "A custom Mia drawing of your choice. Hand-delivered.",
+      hint: "Shown in the gold prize block.",
+      maxLength: 140,
+    },
+    {
+      key: "openingDate",
+      label: "Date predictions open (free text)",
+      kind: "text",
+      defaultValue: "Tonight at 9:00 PM EST",
+      maxLength: 80,
+    },
+    {
+      key: "ctaUrl",
+      label: "Button URL",
+      kind: "text",
+      defaultValue: "https://quiz.miaswebsites.art/predict",
+      maxLength: 240,
+    },
+    {
+      key: "bracketUrl",
+      label: "Live bracket image URL",
+      kind: "text",
+      defaultValue:
+        "https://quiz.miaswebsites.art/api/bracket/snapshot.svg?bracket=main",
+      maxLength: 400,
+    },
+  ],
+  render({ subject, fields }) {
+    const openingHook = getField(this, fields, "openingHook");
+    const prizeLine = getField(this, fields, "prizeLine");
+    const openingDate = getField(this, fields, "openingDate");
+    const ctaUrl = getField(this, fields, "ctaUrl");
+    const bracketUrl = getField(this, fields, "bracketUrl");
+    const finalSubject = subject.trim() || this.defaultSubject;
+
+    const text = [
+      "MIA'S QUIZ TOURNAMENT — BRACKET PICK'EM",
+      "═══════════════════════════════════════",
+      "",
+      `OPENS: ${openingDate}`,
+      `PRIZE: ${prizeLine}`,
+      "",
+      openingHook,
+      "",
+      "HOW IT WORKS:",
+      "  1. Sign in.",
+      "  2. Predict every undecided matchup — main bracket AND losers bracket.",
+      "  3. Score points as matches resolve.",
+      "  4. Climb the leaderboard.",
+      "",
+      "POINT VALUES:",
+      "  • Main R2 / late R1: 1 pt",
+      "  • Main semis: 2 pts",
+      "  • Main final: 4 pts",
+      "  • Losers bracket: 1 pt each",
+      "",
+      `→ Make your picks: ${ctaUrl}`,
+      "",
+      "Not gambling. No money changes hands. Players of all ages welcome. Past predictions do not guarantee future results. Bracket Pick'Em is brought to you by The Quiz Book, a wholly-owned subsidiary of an 8-year-old.",
+      "",
+      "— Sam · Mia's Quiz Tournament",
+    ].join("\n");
+
+    const leaderboardRows = [
+      { medal: "🥇", name: "(your name here)", correct: "—", pts: "—", you: true },
+      { medal: "🥈", name: "Marc", correct: "0/0", pts: "0" },
+      { medal: "🥉", name: "Manou", correct: "0/0", pts: "0" },
+      { medal: "4.", name: "Karen Liss", correct: "0/0", pts: "0" },
+      { medal: "5.", name: "Rhonda", correct: "0/0", pts: "0" },
+    ];
+
+    const stepCopy = [
+      "Sign in (you already have an account).",
+      "Open <strong>🔮 Predict</strong> in the top nav.",
+      "Tap who you think wins each matchup. Main bracket AND losers bracket.",
+      "Watch the leaderboard live. Edit your picks until each match locks.",
+      "Win the points race. Win the prize. Talk about it for years.",
+    ];
+
+    const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="color-scheme" content="light only" />
+<title>${esc(finalSubject)}</title>
+<style>
+  @import url("https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Quicksand:wght@500;600;700&display=swap");
+</style>
+</head>
+<body style="margin:0;padding:0;background:#1B0440;font-family:Quicksand,system-ui,sans-serif;color:#1B2A4E;">
+  <span style="display:none!important;visibility:hidden;opacity:0;color:transparent;height:0;width:0;overflow:hidden;mso-hide:all;">An exclusive bracket pick'em opportunity inside. ${esc(prizeLine)}</span>
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:linear-gradient(180deg,#1B0440 0%,#0B0322 100%);">
+    <tr><td align="center" style="padding:24px 14px 32px;">
+
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="640" style="width:100%;max-width:640px;margin:0 auto 14px;">
+        <tr><td style="padding:6px 14px;background:#1B2A4E;color:#FFD93D;font-family:Fredoka,sans-serif;font-weight:700;font-size:11px;letter-spacing:.18em;text-transform:uppercase;text-align:center;border-radius:4px;">
+          ⚠️ PAID INTEREST: NONE · STAKES: ETERNAL · OPENS ${esc(openingDate.toUpperCase())}
+        </td></tr>
+      </table>
+
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="640" style="width:100%;max-width:640px;background:#FFFFFF;border:4px solid #1B2A4E;border-radius:28px;box-shadow:0 0 0 4px #FFCC00, 0 0 0 6px #1B2A4E, 12px 12px 0 6px #1B2A4E;overflow:hidden;">
+
+        <tr><td style="height:8px;background:repeating-linear-gradient(45deg,#FFCC00 0 18px,#1B2A4E 18px 36px);line-height:0;font-size:0;">&nbsp;</td></tr>
+
+        <tr><td style="background:linear-gradient(180deg,#FFCC00 0%,#FF6B00 100%);padding:34px 28px 22px;text-align:center;">
+          <p style="margin:0;font-family:Fredoka,sans-serif;font-weight:700;font-size:13px;letter-spacing:.32em;text-transform:uppercase;color:#1B0440;">An Unprecedented Opportunity From</p>
+          <p style="margin:6px 0 0;font-family:Fredoka,sans-serif;font-weight:700;font-size:18px;color:#1B0440;">Mia&rsquo;s Quiz Tournament</p>
+          <h1 style="margin:14px 0 0;font-family:Fredoka,sans-serif;font-weight:700;font-size:62px;line-height:0.9;color:#1B0440;text-shadow:3px 3px 0 #FFFFFF, 6px 6px 0 #1B0440;letter-spacing:-0.01em;">BRACKET<br/>PICK&rsquo;EM</h1>
+          <p style="margin:14px 0 0;font-family:Fredoka,sans-serif;font-weight:700;font-size:18px;color:#1B0440;letter-spacing:.06em;">Coming&nbsp;Soon&nbsp;·&nbsp;${esc(openingDate)}</p>
+          <img src="https://quiz.miaswebsites.art/email-assets/sparkles.gif" width="480" alt="" style="display:block;width:100%;max-width:480px;height:auto;margin:14px auto 0;"/>
+        </td></tr>
+
+        <tr><td style="padding:28px 36px 12px;">
+          <p style="margin:0 0 14px;font-family:Quicksand,sans-serif;font-size:17px;line-height:1.65;color:#1B2A4E;">${esc(openingHook).replace(/\n/g, "<br/>")}</p>
+        </td></tr>
+
+        <tr><td style="padding:6px 24px 8px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+            <tr>
+              <td width="33%" align="center" style="padding:6px;">
+                <div style="background:#FFD93D;border:3px solid #1B2A4E;border-radius:14px;box-shadow:4px 4px 0 #1B2A4E;padding:14px 8px;">
+                  <div style="font-family:Fredoka,sans-serif;font-weight:700;font-size:30px;color:#1B0440;line-height:1;">16+</div>
+                  <div style="font-family:Fredoka,sans-serif;font-weight:700;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#1B0440;margin-top:4px;">Matchups<br/>predictable</div>
+                </div>
+              </td>
+              <td width="33%" align="center" style="padding:6px;">
+                <div style="background:#FF6B9D;border:3px solid #1B2A4E;border-radius:14px;box-shadow:4px 4px 0 #1B2A4E;padding:14px 8px;">
+                  <div style="font-family:Fredoka,sans-serif;font-weight:700;font-size:30px;color:#FFFFFF;line-height:1;">17</div>
+                  <div style="font-family:Fredoka,sans-serif;font-weight:700;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#FFFFFF;margin-top:4px;">Total points<br/>up for grabs</div>
+                </div>
+              </td>
+              <td width="33%" align="center" style="padding:6px;">
+                <div style="background:#7DD87D;border:3px solid #1B2A4E;border-radius:14px;box-shadow:4px 4px 0 #1B2A4E;padding:14px 8px;">
+                  <div style="font-family:Fredoka,sans-serif;font-weight:700;font-size:30px;color:#1B0440;line-height:1;">$0</div>
+                  <div style="font-family:Fredoka,sans-serif;font-weight:700;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#1B0440;margin-top:4px;">Entry fee<br/>forever</div>
+                </div>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+
+        <tr><td style="padding:14px 24px 4px;">
+          <p style="margin:0 4px 6px;font-family:Fredoka,sans-serif;font-weight:700;font-size:11px;letter-spacing:.2em;color:#E94B7E;text-transform:uppercase;">📸 The board you&rsquo;re going to predict</p>
+          <a href="${esc(ctaUrl)}" style="display:block;text-decoration:none;border:3px solid #1B2A4E;border-radius:18px;background:#FFFFFF;box-shadow:4px 4px 0 #1B2A4E;overflow:hidden;">
+            <img src="${esc(bracketUrl)}" alt="Live bracket — current state" style="display:block;width:100%;height:auto;background:#B7E5FF;"/>
+          </a>
+          <p style="margin:8px 4px 0;font-family:Quicksand,sans-serif;font-size:12px;color:#3B4A7E;text-align:center;">Live snapshot. Refreshes every time you open this email. Pick the winners.</p>
+        </td></tr>
+
+        <tr><td style="padding:18px 24px 4px;">
+          <p style="margin:0 4px 6px;font-family:Fredoka,sans-serif;font-weight:700;font-size:11px;letter-spacing:.2em;color:#E94B7E;text-transform:uppercase;">📸 The leaderboard you&rsquo;re going to climb</p>
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#FFF7E6;border:3px solid #1B2A4E;border-radius:18px;box-shadow:4px 4px 0 #1B2A4E;">
+            <tr><td style="padding:14px 16px 6px;">
+              <div style="font-family:Fredoka,sans-serif;font-weight:700;font-size:16px;color:#1B0440;">🏆 Predictor Leaderboard <span style="float:right;font-size:11px;color:#3B4A7E;font-weight:600;letter-spacing:.06em;">live</span></div>
+            </td></tr>
+            ${leaderboardRows
+              .map(
+                (r) => `
+              <tr><td style="padding:6px 16px;">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="${r.you ? "background:#FFD93D;" : "background:#FFFFFF;"}border:2px solid #1B2A4E;border-radius:10px;">
+                  <tr>
+                    <td width="36" style="padding:8px 0 8px 12px;font-family:Fredoka,sans-serif;font-weight:700;font-size:18px;color:#1B0440;">${r.medal}</td>
+                    <td style="padding:8px 8px;font-family:Fredoka,sans-serif;font-weight:700;font-size:15px;color:#1B0440;">${esc(r.name)}${r.you ? ' <span style="display:inline-block;background:#FF6B9D;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;margin-left:6px;">YOU</span>' : ""}</td>
+                    <td style="padding:8px 8px;font-family:Quicksand,sans-serif;font-size:11px;color:#3B4A7E;text-align:right;">${r.correct} correct</td>
+                    <td width="60" style="padding:8px 12px 8px 8px;font-family:Fredoka,sans-serif;font-weight:700;font-size:18px;color:#E94B7E;text-align:right;">${r.pts}<span style="font-size:10px;color:#3B4A7E;"> pts</span></td>
+                  </tr>
+                </table>
+              </td></tr>`
+              )
+              .join("")}
+            <tr><td style="padding:6px 16px 14px;font-family:Quicksand,sans-serif;font-size:11px;color:#3B4A7E;text-align:center;">↑ that #1 spot is currently unoccupied</td></tr>
+          </table>
+        </td></tr>
+
+        <tr><td style="padding:18px 24px 4px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:linear-gradient(135deg,#FFCC00 0%,#FF6B00 100%);border:3px solid #1B2A4E;border-radius:18px;box-shadow:4px 4px 0 #1B2A4E;">
+            <tr><td align="center" style="padding:18px 22px;">
+              <img src="https://quiz.miaswebsites.art/email-assets/crown.gif" width="92" height="80" alt="" style="display:block;width:92px;height:80px;margin:0 auto 4px;"/>
+              <div style="font-family:Fredoka,sans-serif;font-weight:700;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:#1B0440;">The grand prize</div>
+              <div style="font-family:Fredoka,sans-serif;font-weight:700;font-size:24px;color:#1B0440;line-height:1.15;margin-top:6px;">${esc(prizeLine)}</div>
+            </td></tr>
+          </table>
+        </td></tr>
+
+        <tr><td style="padding:22px 36px 4px;">
+          <p style="margin:0 0 10px;font-family:Fredoka,sans-serif;font-weight:700;font-size:13px;letter-spacing:.18em;text-transform:uppercase;color:#1B2A4E;">⚙️ How it works</p>
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+            ${stepCopy
+              .map(
+                (step, i) => `
+              <tr>
+                <td width="36" valign="top" style="padding:6px 12px 6px 0;">
+                  <div style="width:28px;height:28px;border-radius:999px;background:#FF6B9D;color:#fff;font-family:Fredoka,sans-serif;font-weight:700;font-size:14px;text-align:center;line-height:26px;border:2px solid #1B2A4E;">${i + 1}</div>
+                </td>
+                <td style="padding:6px 0;font-family:Quicksand,sans-serif;font-size:15px;color:#1B2A4E;line-height:1.55;">${step}</td>
+              </tr>`
+              )
+              .join("")}
+          </table>
+        </td></tr>
+
+        <tr><td style="padding:14px 24px 4px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+            <tr>
+              <td width="50%" valign="top" style="padding:6px;">
+                <div style="background:#FFFFFF;border:3px solid #1B2A4E;border-radius:14px;box-shadow:3px 3px 0 #1B2A4E;padding:12px 14px;">
+                  <p style="margin:0;font-family:Quicksand,sans-serif;font-size:13px;font-style:italic;color:#1B2A4E;line-height:1.5;">&ldquo;I lost my March Madness bracket. THIS bracket I&rsquo;m gonna win.&rdquo;</p>
+                  <p style="margin:6px 0 0;font-family:Fredoka,sans-serif;font-weight:700;font-size:11px;letter-spacing:.06em;color:#E94B7E;">— Some guy who emailed us</p>
+                </div>
+              </td>
+              <td width="50%" valign="top" style="padding:6px;">
+                <div style="background:#FFFFFF;border:3px solid #1B2A4E;border-radius:14px;box-shadow:3px 3px 0 #1B2A4E;padding:12px 14px;">
+                  <p style="margin:0;font-family:Quicksand,sans-serif;font-size:13px;font-style:italic;color:#1B2A4E;line-height:1.5;">&ldquo;Finally, a way to lord over my family without spending money.&rdquo;</p>
+                  <p style="margin:6px 0 0;font-family:Fredoka,sans-serif;font-weight:700;font-size:11px;letter-spacing:.06em;color:#E94B7E;">— a verified pre-existing customer</p>
+                </div>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+
+        <tr><td align="center" style="padding:26px 36px 6px;">
+          <a href="${esc(ctaUrl)}" style="display:inline-block;background:linear-gradient(180deg,#FFCC00 0%,#FF6B00 100%);color:#1B0440;padding:20px 38px;border:4px solid #1B2A4E;border-radius:16px;box-shadow:6px 6px 0 #1B2A4E;font-family:Fredoka,sans-serif;font-weight:700;font-size:24px;text-decoration:none;letter-spacing:.04em;text-transform:uppercase;">▶ Claim Your Picks</a>
+          <p style="margin:10px 4px 0;font-family:Fredoka,sans-serif;font-weight:700;font-size:11px;letter-spacing:.16em;color:#1B2A4E;text-transform:uppercase;">No fee. No money. No regret. Just glory.</p>
+        </td></tr>
+
+        <tr><td style="padding:18px 36px 8px;">
+          <div style="margin:6px 0 4px;font-family:Fredoka,sans-serif;">
+            <p style="margin:0;font-weight:600;font-size:16px;color:#1B2A4E;">See you at the top of the board,</p>
+            <p style="margin:6px 0 0;font-weight:700;font-size:32px;color:#E94B7E;line-height:1;">— Sam</p>
+            <p style="margin:6px 0 0;font-family:Quicksand,sans-serif;font-size:13px;color:#3B4A7E;">Site administrator&nbsp;·&nbsp;Mia&rsquo;s Quiz Tournament</p>
+          </div>
+        </td></tr>
+
+        <tr><td style="padding:8px 36px 16px;">
+          <p style="margin:14px 0 0;padding:14px;background:#F4ECFF;border:2px dashed #B23AFF;border-radius:10px;font-family:Quicksand,sans-serif;font-size:10px;line-height:1.45;color:#3B1F70;">
+            <strong style="text-transform:uppercase;letter-spacing:.1em;">Required disclosures:</strong>
+            Bracket Pick&rsquo;Em is a strategic skill-based competition between consenting tournament participants and is <em>not gambling</em>. No money, fiat, crypto, vintage Pokémon cards, or other items of monetary value will be wagered, exchanged, or otherwise change hands at any point. Past predictions do not guarantee future results. Players of all ages are welcome and in fact encouraged. Please do not consult a financial advisor before participating; consult Mia. Bracket Pick&rsquo;Em is brought to you by The Quiz Book, a wholly-owned subsidiary of an 8-year-old. By tapping a button you agree to be a good sport. Void where prohibited by parents. Side effects may include bragging.
+          </p>
+        </td></tr>
+
+        <tr><td style="padding:0;line-height:0;font-size:0;">
+          <div style="background:#7BC4A4;border-top:3px solid #1B2A4E;height:48px;">&nbsp;</div>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+
+    return { subject: finalSubject, html, text };
+  },
+};
+
+const NEW_AUTH_AND_MIAMAIL: EmailTemplate = {
+  id: "new-auth-and-miamail",
+  name: "New sign-in + Miamail",
+  description:
+    "Heads-up: we've moved sign-in over to Auth0 (six-digit code instead of magic link) and shipped Miamail, the in-app inbox where every email you've ever sent shows up.",
+  defaultSubject:
+    "Two upgrades on Mia's Quiz Tournament — new sign-in + Miamail 📬",
+  fields: [
+    {
+      key: "intro",
+      label: "Opener",
+      kind: "textarea",
+      defaultValue:
+        "Quick one — two changes landed on Mia's Quiz Tournament that you'll notice next time you sign in. Nothing's broken, your account is exactly the same, but the door looks a little different.",
+      rows: 3,
+      maxLength: 600,
+    },
+    {
+      key: "authBlurb",
+      label: "Auth0 explainer",
+      kind: "textarea",
+      defaultValue:
+        "Sign-in is now powered by Auth0. Instead of a magic link in your inbox, you'll get a six-digit code on the Auth0 page — type it in and you're back. Same email address, same account, same data. The login screen is at the same place: just click \"Continue with Auth0\".",
+      rows: 4,
+      maxLength: 800,
+    },
+    {
+      key: "miamailBlurb",
+      label: "Miamail explainer",
+      kind: "textarea",
+      defaultValue:
+        "Miamail is a brand-new inbox baked right into the site. Every email I send you — schedule notes, bracket updates, tiebreaker quizzes, this very email — shows up in your Miamail. So if you lose one in your real inbox, it's still there. Tap the 📬 Miamail button in the nav after you sign in.",
+      rows: 4,
+      maxLength: 800,
+    },
+    {
+      key: "logoutNote",
+      label: "Forced sign-out note",
+      kind: "textarea",
+      defaultValue:
+        "I've signed everyone out across the board so the next time you visit, you'll go through the new flow once. Takes thirty seconds. Promise.",
+      rows: 3,
+      maxLength: 600,
+    },
+    {
+      key: "outro",
+      label: "Closing",
+      kind: "textarea",
+      defaultValue:
+        "Any weirdness, just reply to this email. Have fun!",
+      rows: 2,
+      maxLength: 400,
+    },
+  ],
+  render({ subject, fields }) {
+    const intro = getField(this, fields, "intro");
+    const authBlurb = getField(this, fields, "authBlurb");
+    const miamailBlurb = getField(this, fields, "miamailBlurb");
+    const logoutNote = getField(this, fields, "logoutNote");
+    const outro = getField(this, fields, "outro");
+    const finalSubject = subject.trim() || this.defaultSubject;
+
+    const text = [
+      "Mia's Quiz Tournament",
+      "Two upgrades — what changed",
+      "(From Sam, site admin)",
+      "",
+      "Hi {firstName}!",
+      "",
+      intro,
+      "",
+      "1. New sign-in via Auth0",
+      authBlurb,
+      "",
+      "2. Miamail — your in-app inbox",
+      miamailBlurb,
+      "",
+      logoutNote,
+      "",
+      outro,
+      "",
+      "Sign in: https://quiz.miaswebsites.art/signin",
+      "",
+      "— Sam",
+      "Site administrator · Mia's Quiz Tournament",
+    ].join("\n");
+
+    const paragraph = (s: string) =>
+      `<p style="margin:0 0 14px;font-family:Quicksand,system-ui,sans-serif;font-size:16px;line-height:1.65;color:#1B2A4E;">${esc(
+        s
+      )}</p>`;
+
+    const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="color-scheme" content="light only" />
+<meta name="supported-color-schemes" content="light" />
+<title>${esc(finalSubject)}</title>
+<style>
+  @import url("https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Quicksand:wght@500;600;700&display=swap");
+</style>
+</head>
+<body style="margin:0;padding:0;background:#B7E5FF;font-family:Quicksand,system-ui,sans-serif;color:#1B2A4E;">
+  <span style="display:none!important;visibility:hidden;opacity:0;color:transparent;height:0;width:0;overflow:hidden;mso-hide:all;">New sign-in flow + Miamail inbox — quick walkthrough.</span>
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#B7E5FF;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="width:100%;max-width:600px;background:#FFFFFF;border:4px solid #1B2A4E;border-radius:28px;box-shadow:8px 8px 0 0 #1B2A4E;">
+          <tr>
+            <td style="padding:36px 36px 8px 36px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="padding-right:14px;vertical-align:middle;">
+                    <img src="https://quiz.miaswebsites.art/email-assets/sun.gif" width="64" height="64" alt="" style="display:block;width:64px;height:64px;"/>
+                  </td>
+                  <td style="vertical-align:middle;">
+                    <p style="margin:0;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:24px;color:#1B2A4E;line-height:1;">Mia&rsquo;s Quiz Tournament</p>
+                    <p style="margin:4px 0 0;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:600;font-size:13px;color:#E94B7E;letter-spacing:.05em;text-transform:uppercase;">Two upgrades — what changed</p>
+                  </td>
+                </tr>
+              </table>
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:22px;">
+                <tr>
+                  <td align="right">
+                    <span style="display:inline-block;background:#87CEEB;color:#1B2A4E;padding:5px 14px;border-radius:999px;border:3px solid #1B2A4E;box-shadow:2px 2px 0 0 #1B2A4E;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:11px;letter-spacing:.04em;">✉️&nbsp;FROM SAM, SITE ADMIN</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:18px 36px 8px 36px;">
+              <h1 style="margin:0 0 16px;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:30px;color:#1B2A4E;line-height:1.1;">Hi {firstName}!&nbsp;👋</h1>
+              ${paragraph(intro)}
+
+              <!-- Change 1: Auth0 -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:22px 0 18px;background:#FFD93D;border:3px solid #1B2A4E;border-radius:18px;box-shadow:4px 4px 0 0 #1B2A4E;">
+                <tr>
+                  <td style="padding:18px 22px 8px 22px;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td width="44" style="vertical-align:middle;padding-right:12px;">
+                          <div style="width:36px;height:36px;border-radius:999px;background:#FF6B9D;border:3px solid #1B2A4E;text-align:center;line-height:30px;font-size:16px;box-shadow:2px 2px 0 0 #1B2A4E;">🔐</div>
+                        </td>
+                        <td style="vertical-align:middle;">
+                          <p style="margin:0;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:11px;color:#3B4A7E;letter-spacing:.06em;text-transform:uppercase;">Change #1</p>
+                          <p style="margin:2px 0 0;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:22px;color:#1B2A4E;line-height:1.15;">New sign-in via Auth0</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:0 22px 18px 22px;">
+                    <p style="margin:8px 0 0;font-family:Quicksand,system-ui,sans-serif;font-size:15px;line-height:1.6;color:#1B2A4E;">${esc(
+                      authBlurb
+                    )}</p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Change 2: Miamail -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 22px;background:#87CEEB;border:3px solid #1B2A4E;border-radius:18px;box-shadow:4px 4px 0 0 #1B2A4E;">
+                <tr>
+                  <td style="padding:18px 22px 8px 22px;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td width="44" style="vertical-align:middle;padding-right:12px;">
+                          <div style="width:36px;height:36px;border-radius:999px;background:#FFFFFF;border:3px solid #1B2A4E;text-align:center;line-height:30px;font-size:16px;box-shadow:2px 2px 0 0 #1B2A4E;">📬</div>
+                        </td>
+                        <td style="vertical-align:middle;">
+                          <p style="margin:0;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:11px;color:#3B4A7E;letter-spacing:.06em;text-transform:uppercase;">Change #2</p>
+                          <p style="margin:2px 0 0;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:22px;color:#1B2A4E;line-height:1.15;">Miamail — in-app inbox</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:0 22px 18px 22px;">
+                    <p style="margin:8px 0 0;font-family:Quicksand,system-ui,sans-serif;font-size:15px;line-height:1.6;color:#1B2A4E;">${esc(
+                      miamailBlurb
+                    )}</p>
+                  </td>
+                </tr>
+              </table>
+
+              ${paragraph(logoutNote)}
+
+              <!-- Big sign-in button -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:6px 0 18px;">
+                <tr>
+                  <td align="center">
+                    <a href="https://quiz.miaswebsites.art/signin" style="display:inline-block;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:20px;color:#FFFFFF;text-decoration:none;background:#FF6B9D;border:3px solid #1B2A4E;border-radius:16px;box-shadow:4px 4px 0 0 #1B2A4E;padding:14px 32px;">
+                      🚪&nbsp;Sign back in
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              ${paragraph(outro)}
+
+              <div style="margin:28px 0 8px;">
+                <p style="margin:0;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:600;font-size:16px;color:#1B2A4E;">Talk soon,</p>
+                <p style="margin:6px 0 0;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:36px;color:#E94B7E;line-height:1;">— Sam</p>
+                <p style="margin:6px 0 0;font-family:Quicksand,system-ui,sans-serif;font-size:13px;color:#3B4A7E;">Site administrator&nbsp;·&nbsp;Mia&rsquo;s Quiz Tournament</p>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0;line-height:0;font-size:0;">
+              <div style="background:#7BC4A4;border-top:3px solid #1B2A4E;height:48px;border-bottom-left-radius:24px;border-bottom-right-radius:24px;">&nbsp;</div>
+            </td>
+          </tr>
+        </table>
+        <p style="margin:18px 0 0;font-family:Quicksand,system-ui,sans-serif;font-size:11px;color:#3B4A7E;opacity:.8;">You&rsquo;re receiving this because you have an account on Mia&rsquo;s Quiz Tournament. Reply any time.</p>
+      </td>
+    </tr>
+  </table>
+</body></html>`;
+
+    return { subject: finalSubject, html, text };
+  },
+};
+
 const TEMPLATES: EmailTemplate[] = [
+  NEW_AUTH_AND_MIAMAIL,
   SCHEDULE_SHIFT_PUBLIC,
   BRACKET_UPDATE,
   STILL_IN,
   ELIMINATED_REVEAL,
   TIME_RUNNING_OUT,
   TIEBREAKER_QUIZ,
+  R1_RESULTS_DOUBLE_ELIM,
+  PICKEM_HYPE,
 ];
 
 export function listTemplates(): EmailTemplate[] {

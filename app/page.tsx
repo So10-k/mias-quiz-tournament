@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { Stage } from "@/components/Stage";
 import { MeetMiaPlayer } from "@/components/MeetMiaPlayer";
+import { CountdownCard } from "@/components/CountdownCard";
 import { AUTHOR_NAME, AUTHOR_AGE, PRIZE } from "@/lib/author";
 import { getActiveTournament, getLatestTournament, getCast } from "@/lib/engine";
+import { getCountdown } from "@/lib/countdown-settings";
 import { db, schema } from "@/db";
 import { and, eq } from "drizzle-orm";
 
@@ -39,6 +41,7 @@ export default async function Home() {
 
   const cast = latest ? await getCast(latest.id) : [];
   const playersIn = cast.filter((c) => !c.enrollment.eliminatedAt).length;
+  const countdown = await getCountdown();
 
   const subtitle = latest?.subtitle ?? "Quizzes! Friends! Adventure!";
 
@@ -58,6 +61,13 @@ export default async function Home() {
           <span className="font-display text-base md:text-lg text-navy bg-sun px-4 py-1 rounded-full border-3 border-navy shadow-pop-sm">
             🏆 HOSTED BY {AUTHOR_NAME.toUpperCase()}, AGE {AUTHOR_AGE}
           </span>
+
+          {countdown.visible ? (
+            <CountdownCard
+              label={countdown.label}
+              targetIso={countdown.targetIso}
+            />
+          ) : null}
 
           <h1
             className="font-display text-navy mt-5 leading-none drop-shadow-[4px_4px_0_var(--navy)]"

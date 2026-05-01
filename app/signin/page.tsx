@@ -1,8 +1,14 @@
 import Link from "next/link";
 import { Stage } from "@/components/Stage";
 import { signInAction } from "./actions";
+import { auth0SignInAction } from "./auth0-action";
 
 export const dynamic = "force-dynamic";
+
+const auth0Enabled =
+  !!process.env.AUTH_AUTH0_ID &&
+  !!process.env.AUTH_AUTH0_SECRET &&
+  !!process.env.AUTH_AUTH0_ISSUER;
 
 export default async function SignInPage({
   searchParams,
@@ -23,7 +29,29 @@ export default async function SignInPage({
               Just your email — we&rsquo;ll send a magic link.
             </p>
 
-            <form action={signInAction} className="mt-7 flex flex-col gap-5">
+            {auth0Enabled ? (
+              <form action={auth0SignInAction} className="mt-7 flex flex-col items-center">
+                <button
+                  type="submit"
+                  className="pop pop-coral text-xl"
+                >
+                  🔐 Continue with Auth0
+                </button>
+                <p className="font-body text-xs text-navy-soft mt-3 text-center">
+                  Recommended — Auth0 sends the magic link and handles
+                  sign-in. Same email, same account.
+                </p>
+                <div className="my-5 flex items-center gap-3 w-full">
+                  <span className="h-px flex-1 bg-navy/20" />
+                  <span className="font-body text-xs text-navy-soft uppercase tracking-widest">
+                    or
+                  </span>
+                  <span className="h-px flex-1 bg-navy/20" />
+                </div>
+              </form>
+            ) : null}
+
+            <form action={signInAction} className="mt-2 flex flex-col gap-5">
               <label className="flex flex-col gap-2">
                 <span className="font-display text-xl text-navy">Email</span>
                 <input
@@ -44,9 +72,9 @@ export default async function SignInPage({
 
               <button
                 type="submit"
-                className="pop pop-coral text-xl mt-2 self-center"
+                className="pop pop-white text-base mt-2 self-center"
               >
-                ✉️ Send me a magic link
+                ✉️ Email me a magic link (legacy)
               </button>
             </form>
 

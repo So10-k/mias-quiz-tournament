@@ -14,6 +14,10 @@ import {
 import { togglePageLockAction } from "./page-locks-actions";
 import { getSiteTheme } from "@/lib/site-theme";
 import { setSiteThemeAction } from "./site-theme-actions";
+import { getActiveProvider } from "@/lib/email-provider";
+import { setEmailProviderAction } from "./email-provider-actions";
+import { getCountdown } from "@/lib/countdown-settings";
+import { setCountdownAction } from "./countdown-actions";
 import {
   getOrCreateActiveTournament,
   getRoundsForTournament,
@@ -65,11 +69,14 @@ export default async function HostPanel({
   const rounds = allRounds.filter((r) => !r.isPractice);
   const practiceRounds = allRounds.filter((r) => r.isPractice);
   const cast = await getCast(tournament.id);
-  const bracket = await getBracket(tournament.id);
+  const bracket = await getBracket(tournament.id, "main");
+  const losersBracket = await getBracket(tournament.id, "losers");
   const bracketUsers = await getBracketUsers(tournament.id);
   const championId = await getBracketChampionId(tournament.id);
   const lockedPages = await getLockedPages();
   const siteTheme = await getSiteTheme();
+  const emailProvider = await getActiveProvider();
+  const countdown = await getCountdown();
 
   const activeRound = rounds.find((r) => r.status === "active");
   const draftRounds = rounds.filter((r) => r.status === "draft");
@@ -84,6 +91,12 @@ export default async function HostPanel({
             🛠️ Host Panel
           </h1>
           <div className="flex gap-2 flex-wrap">
+            <Link href="/host/predictions" className="pop pop-coral text-sm">
+              🔮 Predictions
+            </Link>
+            <Link href="/host/email-analytics" className="pop pop-sky text-sm">
+              📨 Emails
+            </Link>
             <Link href="/host/attempts" className="pop pop-grass text-sm">
               📡 Attempts
             </Link>
@@ -308,6 +321,69 @@ export default async function HostPanel({
             </div>
           )}
 
+          {/* Losers bracket (double-elim only — only rendered if it exists) */}
+          {losersBracket.length > 0 ? (
+            <div className="mt-7 pt-5 border-t-3 border-coral-deep border-dashed">
+              <h3 className="font-display text-lg text-coral-deep">
+                💔 Losers bracket
+              </h3>
+              <p className="font-body text-xs text-navy-soft mt-1">
+                Auto-seeded from main R1 losers. From here, one loss = out.
+              </p>
+              <div className="mt-3">
+                <BracketView
+                  rounds={losersBracket}
+                  users={bracketUsers}
+                  championId={null}
+                  renderControls={(m) => {
+                    const playerOptions: Array<{ id: string; name: string }> = [];
+                    if (m.playerAUserId) {
+                      playerOptions.push({
+                        id: m.playerAUserId,
+                        name:
+                          bracketUsers.get(m.playerAUserId)?.name ??
+                          bracketUsers.get(m.playerAUserId)?.email ??
+                          "—",
+                      });
+                    }
+                    if (m.playerBUserId) {
+                      playerOptions.push({
+                        id: m.playerBUserId,
+                        name:
+                          bracketUsers.get(m.playerBUserId)?.name ??
+                          bracketUsers.get(m.playerBUserId)?.email ??
+                          "—",
+                      });
+                    }
+                    return (
+                      <form action={setMatchupWinnerAction} className="flex gap-1">
+                        <input type="hidden" name="matchupId" value={m.id} />
+                        <select
+                          name="winnerUserId"
+                          defaultValue={m.winnerUserId ?? ""}
+                          className="px-2 py-1 bg-white border-2 border-navy rounded-md font-body text-xs flex-1 min-w-0"
+                        >
+                          <option value="">—</option>
+                          {playerOptions.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.name}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="submit"
+                          className="px-2 py-1 rounded-md border-2 border-navy bg-coral-deep text-white font-display text-xs"
+                        >
+                          set
+                        </button>
+                      </form>
+                    );
+                  }}
+                />
+              </div>
+            </div>
+          ) : null}
+
           {/* Round-1 seed swap UI */}
           {bracket.length > 0 ? (
             <div className="mt-7">
@@ -347,6 +423,124 @@ export default async function HostPanel({
               </ul>
             </div>
           ) : null}
+        </section>
+
+        {/* Landing-page countdown card */}
+        <section className="card px-5 py-5">
+          <div className="flex items-baseline justify-between gap-3 flex-wrap">
+            <h2 className="font-display text-2xl text-navy">⏰ Countdown card</h2>
+            <span className="font-body text-xs text-navy-soft">
+              Shows on / and /play when visible
+            </span>
+          </div>
+          <p className="font-body text-sm text-navy-soft mt-1">
+            Pick a label and a target moment. While visible, every signed-in
+            visitor sees a live ticking clock at the top of the home and play
+            pages.
+          </p>
+          <form action={setCountdownAction} className="mt-3 flex flex-col gap-3">
+            <label className="flex flex-col gap-1">
+              <span className="font-display text-sm text-navy">Label</span>
+              <input
+                type="text"
+                name="label"
+                defaultValue={countdown.label}
+                maxLength={80}
+                placeholder="e.g. Round 2 starts in"
+                className="px-3 py-2 bg-white border-3 border-navy rounded-md font-body text-base"
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="font-display text-sm text-navy">
+                Target (your local time)
+              </span>
+              <input
+                type="datetime-local"
+                name="target"
+                defaultValue={countdown.targetIso.slice(0, 16)}
+                className="px-3 py-2 bg-white border-3 border-navy rounded-md font-body text-base"
+              />
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                name="visible"
+                value="yes"
+                defaultChecked={countdown.visible}
+              />
+              <span className="font-display text-sm text-navy">
+                Visible to players (untick to hide)
+              </span>
+            </label>
+            <button type="submit" className="pop pop-coral text-sm self-start">
+              Save countdown
+            </button>
+          </form>
+          <p className="font-body text-xs text-navy-soft mt-3">
+            Currently:{" "}
+            <strong className="text-navy">
+              {countdown.visible ? "showing" : "hidden"}
+            </strong>
+            {countdown.targetIso ? (
+              <>
+                {" "}· target{" "}
+                <code className="text-navy">{countdown.targetIso}</code>
+              </>
+            ) : null}
+          </p>
+        </section>
+
+        {/* Email provider toggle */}
+        <section className="card px-5 py-5">
+          <div className="flex items-baseline justify-between gap-3 flex-wrap">
+            <h2 className="font-display text-2xl text-navy">
+              📬 Email provider
+            </h2>
+            <span className="font-body text-xs text-navy-soft">
+              Affects /host announcements + magic-link sign-in emails
+            </span>
+          </div>
+          <p className="font-body text-sm text-navy-soft mt-1">
+            Switch between <strong>Resend</strong> and <strong>Brevo</strong>{" "}
+            if you&rsquo;re hitting one provider&rsquo;s daily/monthly limits.
+            Both use the same EMAIL_FROM env var; each needs its own API key
+            (RESEND_API_KEY or BREVO_API_KEY).
+          </p>
+          <div className="mt-3 flex flex-wrap gap-3">
+            <form action={setEmailProviderAction}>
+              <input type="hidden" name="provider" value="resend" />
+              <button
+                type="submit"
+                disabled={emailProvider === "resend"}
+                className={
+                  "pop text-sm " +
+                  (emailProvider === "resend" ? "pop-coral" : "pop-white")
+                }
+              >
+                {emailProvider === "resend" ? "● " : ""}📧 Resend
+              </button>
+            </form>
+            <form action={setEmailProviderAction}>
+              <input type="hidden" name="provider" value="brevo" />
+              <button
+                type="submit"
+                disabled={emailProvider === "brevo"}
+                className={
+                  "pop text-sm " +
+                  (emailProvider === "brevo" ? "pop-coral" : "pop-white")
+                }
+              >
+                {emailProvider === "brevo" ? "● " : ""}📨 Brevo
+              </button>
+            </form>
+          </div>
+          <p className="font-body text-xs text-navy-soft mt-3">
+            Currently:{" "}
+            <strong className="text-navy">
+              {emailProvider === "brevo" ? "Brevo" : "Resend"}
+            </strong>
+            . Change takes effect within ~30 seconds (cache).
+          </p>
         </section>
 
         {/* Public site theme */}

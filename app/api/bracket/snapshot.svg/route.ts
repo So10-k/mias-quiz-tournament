@@ -1,15 +1,20 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import {
   getBracket,
   getBracketUsers,
   getBracketChampionId,
+  type BracketKind,
 } from "@/lib/bracket";
 import { getActiveTournament, getLatestTournament } from "@/lib/engine";
 import { renderBracketSvg } from "@/lib/bracket-svg";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const which: BracketKind =
+    req.nextUrl.searchParams.get("bracket") === "losers"
+      ? "losers"
+      : "main";
   const tournament =
     (await getActiveTournament()) ?? (await getLatestTournament());
   if (!tournament) {
@@ -25,17 +30,15 @@ export async function GET() {
     );
   }
   const [rounds, users, championId] = await Promise.all([
-    getBracket(tournament.id),
+    getBracket(tournament.id, which),
     getBracketUsers(tournament.id),
-    getBracketChampionId(tournament.id),
+    which === "main" ? getBracketChampionId(tournament.id) : Promise.resolve(null),
   ]);
   const svg = renderBracketSvg(rounds, users, championId);
   return new NextResponse(svg, {
     status: 200,
     headers: {
       "content-type": "image/svg+xml; charset=utf-8",
-      // Short cache so email clients refetch on each open but we don't
-      // hammer the DB if many recipients open at once.
       "cache-control": "public, max-age=30, stale-while-revalidate=300",
     },
   });

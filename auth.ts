@@ -1,4 +1,5 @@
 import NextAuth from "next-auth";
+import Auth0 from "next-auth/providers/auth0";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { db } from "@/db";
 import {
@@ -7,10 +8,18 @@ import {
   sessions,
   verificationTokens,
 } from "@/db/schema";
-import { Resend } from "resend";
+import { sendOne } from "@/lib/email-provider";
 
 const FROM = process.env.EMAIL_FROM || "Mia's Quiz Tournament <onboarding@resend.dev>";
-const RESEND_API_KEY = process.env.RESEND_API_KEY;
+
+// Auth0 is enabled when both ID + secret are present in env. We keep the
+// existing email/magic-link provider running in parallel so existing users
+// don't lose their flow during the migration; once everyone has signed in
+// via Auth0 at least once, the email provider can be removed.
+const auth0Enabled =
+  !!process.env.AUTH_AUTH0_ID &&
+  !!process.env.AUTH_AUTH0_SECRET &&
+  !!process.env.AUTH_AUTH0_ISSUER;
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: DrizzleAdapter(db, {
@@ -46,33 +55,46 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         identifier: string;
         url: string;
       }) => {
-        const subject = "Your magic link";
-        const text = magicLinkText(url);
-        const html = magicLinkHtml(url);
-
-        if (!RESEND_API_KEY) {
-          // Dev fallback — print the link so you can sign in without email.
+        const result = await sendOne({
+          from: FROM,
+          to: identifier,
+          subject: "Your magic link",
+          text: magicLinkText(url),
+          html: magicLinkHtml(url),
+        });
+        if (result.dryRun) {
           // eslint-disable-next-line no-console
           console.log(
-            `\n  ✦ Magic link for ${identifier}\n  ✦ ${url}\n  ✦ (Set RESEND_API_KEY in .env.local to send real email.)\n`
+            `\n  ✦ Magic link for ${identifier}\n  ✦ ${url}\n  ✦ (Set RESEND_API_KEY or BREVO_API_KEY to send real email.)\n`
           );
           return;
         }
-        const resend = new Resend(RESEND_API_KEY);
-        const { error } = await resend.emails.send({
-          from: FROM,
-          to: identifier,
-          subject,
-          text,
-          html,
-        });
-        if (error) {
+        if (result.errors.length > 0) {
           throw new Error(
-            `Resend failed to send magic link: ${error.message ?? String(error)}`
+            `Email provider (${result.provider}) failed to send magic link: ${result.errors[0]}`
           );
         }
       },
     } as any,
+    ...(auth0Enabled
+      ? [
+          Auth0({
+            clientId: process.env.AUTH_AUTH0_ID,
+            clientSecret: process.env.AUTH_AUTH0_SECRET,
+            issuer: process.env.AUTH_AUTH0_ISSUER,
+            // Link by verified email so existing users keep their `users.id`
+            // (and every FK that depends on it: enrollments, attempts,
+            // predictions, email_sends, files, …). Auth0's passwordless-email
+            // connection only issues tokens after the user clicks a link sent
+            // to that address, so the email is verified end-to-end. Auth.js
+            // calls this "dangerous" because it would let any IdP that
+            // claims an email take over the account; for our trusted
+            // Auth0 tenant the flag is the right call. Reconsider before
+            // adding any IdP that lets users self-attest emails.
+            allowDangerousEmailAccountLinking: true,
+          }),
+        ]
+      : []),
   ],
   callbacks: {
     async session({ session, user }) {
