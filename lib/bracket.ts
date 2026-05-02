@@ -456,35 +456,35 @@ export async function syncEliminationFromBracket(tournamentId: string) {
   const ms = await db
     .select()
     .from(matchups)
-    .where(eq(matchups.tournamentId, tournamentId))
-    .orderBy(asc(matchups.roundIndex));
+    .where(eq(matchups.tournamentId, tournamentId));
   const ens = await db
     .select()
     .from(enrollments)
     .where(eq(enrollments.tournamentId, tournamentId));
 
-  const stillIn = new Set<string>();
-  // A player is "still in" if they appear as A or B in a matchup that has
-  // not yet been resolved against them.
-  for (const m of ms) {
-    if (m.playerAUserId && m.winnerUserId !== m.playerBUserId)
-      stillIn.add(m.playerAUserId);
-    if (m.playerBUserId && m.winnerUserId !== m.playerAUserId)
-      stillIn.add(m.playerBUserId);
-    // If matchup is fully resolved, the loser is removed from stillIn.
-    if (m.winnerUserId) {
-      const loser =
-        m.winnerUserId === m.playerAUserId
-          ? m.playerBUserId
-          : m.winnerUserId === m.playerBUserId
-          ? m.playerAUserId
-          : null;
-      if (loser) stillIn.delete(loser);
+  // A player is "still in" iff there exists at least one matchup containing
+  // them where they HAVEN'T been definitively beaten — i.e. the matchup is
+  // unresolved (winnerUserId === null) OR they're the winner of it. This
+  // is computed PER-PLAYER over the whole matchup list, not incrementally,
+  // so a main-R1 loss doesn't override a still-alive losers-bracket
+  // seating that appears earlier in the iteration order.
+  function isStillIn(userId: string): boolean {
+    for (const m of ms) {
+      const onA = m.playerAUserId === userId;
+      const onB = m.playerBUserId === userId;
+      if (!onA && !onB) continue;
+      // Unresolved matchup containing them → not out.
+      if (!m.winnerUserId) return true;
+      // Resolved AND they won it → not out.
+      if (m.winnerUserId === userId) return true;
+      // Otherwise they lost this one — keep looking for another matchup
+      // where they survive (e.g. losers bracket).
     }
+    return false;
   }
 
   for (const e of ens) {
-    const isOut = !stillIn.has(e.userId);
+    const isOut = !isStillIn(e.userId);
     if (isOut && !e.eliminatedAt) {
       await db
         .update(enrollments)
