@@ -1816,7 +1816,495 @@ const NEW_AUTH_AND_MIAMAIL: EmailTemplate = {
   },
 };
 
+const ROUND_SCHEDULED: EmailTemplate = {
+  id: "round-scheduled",
+  name: "Round scheduled · save the date",
+  description:
+    "Heads-up that a round is on the calendar. Use BEFORE the round goes live to give players a window to plan around. Pairs naturally with the 'Round started · go play' template when the doors actually open.",
+  defaultSubject: "Save the date — Round {chapterNumber} drops {liveDateShort}",
+  fields: [
+    {
+      key: "chapterNumber",
+      label: "Round / chapter number",
+      kind: "text",
+      defaultValue: "2",
+      hint: "Goes in the subject and the big card heading.",
+      maxLength: 8,
+    },
+    {
+      key: "roundTitle",
+      label: "Round title (the picture-book chapter name)",
+      kind: "text",
+      defaultValue: "What's Bigger?",
+      hint: "Shown right under the chapter number.",
+      maxLength: 80,
+    },
+    {
+      key: "liveTime",
+      label: "When the round goes live",
+      kind: "text",
+      defaultValue: "Sunday · 7:00 PM",
+      hint: "The full human-readable time. Shows in the schedule card.",
+      maxLength: 60,
+    },
+    {
+      key: "liveDateShort",
+      label: "Short date (for subject line)",
+      kind: "text",
+      defaultValue: "Sunday",
+      hint: "Slots into the default subject. Keep it punchy.",
+      maxLength: 20,
+    },
+    {
+      key: "deadline",
+      label: "Deadline to finish",
+      kind: "text",
+      defaultValue: "Tuesday · 9:00 PM",
+      maxLength: 60,
+    },
+    {
+      key: "questionCount",
+      label: "Roughly how many questions",
+      kind: "text",
+      defaultValue: "15",
+      maxLength: 6,
+    },
+    {
+      key: "topicTeaser",
+      label: "Topic teaser",
+      kind: "textarea",
+      defaultValue:
+        "This round is a size showdown — fifteen tiny match-ups where you pick what's bigger. No homework needed, no era trivia, no \"did you grow up with this.\" Just stuff that's been the same size for thousands of years.",
+      rows: 3,
+      maxLength: 600,
+    },
+    {
+      key: "prepTips",
+      label: "What to expect (light prep tips)",
+      kind: "textarea",
+      defaultValue:
+        "It opens at the time above and stays open for the full window — play whenever you have a clear ten minutes. The clock doesn't matter; the score does. One attempt only.",
+      rows: 3,
+      maxLength: 600,
+    },
+  ],
+  render({ subject, fields }) {
+    const chapterNumber = getField(this, fields, "chapterNumber");
+    const roundTitle = getField(this, fields, "roundTitle");
+    const liveTime = getField(this, fields, "liveTime");
+    const liveDateShort = getField(this, fields, "liveDateShort");
+    const deadline = getField(this, fields, "deadline");
+    const questionCount = getField(this, fields, "questionCount");
+    const topicTeaser = getField(this, fields, "topicTeaser");
+    const prepTips = getField(this, fields, "prepTips");
+    // Subject merge — replace {chapterNumber} and {liveDateShort} tokens.
+    const finalSubject =
+      (subject.trim() || this.defaultSubject)
+        .replace(/\{chapterNumber\}/g, chapterNumber)
+        .replace(/\{liveDateShort\}/g, liveDateShort);
+
+    const text = [
+      "Mia's Quiz Tournament",
+      `Round ${chapterNumber} · save the date`,
+      "(From Sam, site admin)",
+      "",
+      "Hi {firstName}!",
+      "",
+      `Round ${chapterNumber} — "${roundTitle}" — is on the calendar.`,
+      "",
+      "Schedule:",
+      `  • Goes live: ${liveTime}`,
+      `  • Deadline:  ${deadline}`,
+      `  • Length:    about ${questionCount} questions`,
+      "",
+      topicTeaser,
+      "",
+      prepTips,
+      "",
+      "I'll send another email the moment it opens.",
+      "",
+      "— Sam",
+      "Site administrator · Mia's Quiz Tournament",
+    ].join("\n");
+
+    const paragraph = (s: string) =>
+      `<p style="margin:0 0 14px;font-family:Quicksand,system-ui,sans-serif;font-size:16px;line-height:1.65;color:#1B2A4E;">${esc(
+        s
+      )}</p>`;
+
+    const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="color-scheme" content="light only" />
+<meta name="supported-color-schemes" content="light" />
+<title>${esc(finalSubject)}</title>
+<style>
+  @import url("https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Quicksand:wght@500;600;700&display=swap");
+</style>
+</head>
+<body style="margin:0;padding:0;background:#B7E5FF;font-family:Quicksand,system-ui,sans-serif;color:#1B2A4E;">
+  <span style="display:none!important;visibility:hidden;opacity:0;color:transparent;height:0;width:0;overflow:hidden;mso-hide:all;">Round ${esc(
+    chapterNumber
+  )} drops ${esc(liveDateShort)}. Save the date.</span>
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#B7E5FF;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="width:100%;max-width:600px;background:#FFFFFF;border:4px solid #1B2A4E;border-radius:28px;box-shadow:8px 8px 0 0 #1B2A4E;">
+          <tr>
+            <td style="padding:36px 36px 8px 36px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="padding-right:14px;vertical-align:middle;">
+                    <img src="https://quiz.miaswebsites.art/email-assets/sun.gif" width="64" height="64" alt="" style="display:block;width:64px;height:64px;"/>
+                  </td>
+                  <td style="vertical-align:middle;">
+                    <p style="margin:0;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:24px;color:#1B2A4E;line-height:1;">Mia&rsquo;s Quiz Tournament</p>
+                    <p style="margin:4px 0 0;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:600;font-size:13px;color:#E94B7E;letter-spacing:.05em;text-transform:uppercase;">📅&nbsp;Save the date</p>
+                  </td>
+                </tr>
+              </table>
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:22px;">
+                <tr>
+                  <td align="right">
+                    <span style="display:inline-block;background:#87CEEB;color:#1B2A4E;padding:5px 14px;border-radius:999px;border:3px solid #1B2A4E;box-shadow:2px 2px 0 0 #1B2A4E;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:11px;letter-spacing:.04em;">✉️&nbsp;FROM SAM, SITE ADMIN</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:18px 36px 8px 36px;">
+              <p style="margin:0;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:600;font-size:13px;color:#3B4A7E;letter-spacing:.06em;text-transform:uppercase;">Hi {firstName} — heads up:</p>
+              <h1 style="margin:6px 0 4px;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:36px;color:#1B2A4E;line-height:1;">📖&nbsp;Round ${esc(
+                chapterNumber
+              )}</h1>
+              <p style="margin:0 0 18px;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:22px;color:#E94B7E;line-height:1.1;">${esc(
+                roundTitle
+              )}</p>
+
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 22px;background:#B7E5FF;border:3px solid #1B2A4E;border-radius:16px;box-shadow:4px 4px 0 0 #1B2A4E;">
+                <tr>
+                  <td style="padding:16px 22px 6px 22px;">
+                    <p style="margin:0;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:13px;color:#E94B7E;letter-spacing:.06em;text-transform:uppercase;">⏰&nbsp;The schedule</p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:6px 22px 6px 22px;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                      <tr>
+                        <td width="52" style="padding:8px 12px 8px 0;vertical-align:middle;">
+                          <div style="width:38px;height:38px;border-radius:999px;background:#FF6B9D;border:3px solid #1B2A4E;text-align:center;line-height:32px;font-size:18px;box-shadow:2px 2px 0 0 #1B2A4E;">🚀</div>
+                        </td>
+                        <td style="padding:8px 0;vertical-align:middle;">
+                          <p style="margin:0;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:12px;color:#3B4A7E;letter-spacing:.06em;text-transform:uppercase;">Goes live</p>
+                          <p style="margin:2px 0 0;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:20px;color:#1B2A4E;line-height:1.2;">${esc(
+                            liveTime
+                          )}</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:0 22px;">
+                    <div style="border-top:2px dashed rgba(27,42,78,.22);height:0;line-height:0;font-size:0;">&nbsp;</div>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:6px 22px 6px 22px;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                      <tr>
+                        <td width="52" style="padding:8px 12px 8px 0;vertical-align:middle;">
+                          <div style="width:38px;height:38px;border-radius:999px;background:#FFD93D;border:3px solid #1B2A4E;text-align:center;line-height:32px;font-size:18px;box-shadow:2px 2px 0 0 #1B2A4E;">🏁</div>
+                        </td>
+                        <td style="padding:8px 0;vertical-align:middle;">
+                          <p style="margin:0;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:12px;color:#3B4A7E;letter-spacing:.06em;text-transform:uppercase;">Deadline</p>
+                          <p style="margin:2px 0 0;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:20px;color:#1B2A4E;line-height:1.2;">${esc(
+                            deadline
+                          )}</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:0 22px;">
+                    <div style="border-top:2px dashed rgba(27,42,78,.22);height:0;line-height:0;font-size:0;">&nbsp;</div>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:6px 22px 16px 22px;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                      <tr>
+                        <td width="52" style="padding:8px 12px 8px 0;vertical-align:middle;">
+                          <div style="width:38px;height:38px;border-radius:999px;background:#7DD87D;border:3px solid #1B2A4E;text-align:center;line-height:32px;font-size:18px;box-shadow:2px 2px 0 0 #1B2A4E;">📝</div>
+                        </td>
+                        <td style="padding:8px 0;vertical-align:middle;">
+                          <p style="margin:0;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:12px;color:#3B4A7E;letter-spacing:.06em;text-transform:uppercase;">Length</p>
+                          <p style="margin:2px 0 0;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:20px;color:#1B2A4E;line-height:1.2;">~${esc(
+                            questionCount
+                          )} questions</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              ${paragraph(topicTeaser)}
+              ${paragraph(prepTips)}
+              ${paragraph(
+                "I'll fire off a second email the moment the doors open — that one has the play button."
+              )}
+
+              <div style="margin:28px 0 8px;">
+                <p style="margin:0;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:600;font-size:16px;color:#1B2A4E;">See you Sunday,</p>
+                <p style="margin:6px 0 0;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:36px;color:#E94B7E;line-height:1;">— Sam</p>
+                <p style="margin:6px 0 0;font-family:Quicksand,system-ui,sans-serif;font-size:13px;color:#3B4A7E;">Site administrator&nbsp;·&nbsp;Mia&rsquo;s Quiz Tournament</p>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0;line-height:0;font-size:0;">
+              <div style="background:#7BC4A4;border-top:3px solid #1B2A4E;height:48px;border-bottom-left-radius:24px;border-bottom-right-radius:24px;">&nbsp;</div>
+            </td>
+          </tr>
+        </table>
+        <p style="margin:18px 0 0;font-family:Quicksand,system-ui,sans-serif;font-size:11px;color:#3B4A7E;opacity:.8;">You&rsquo;re receiving this because you&rsquo;re in Mia&rsquo;s Quiz Tournament. Reply any time.</p>
+      </td>
+    </tr>
+  </table>
+</body></html>`;
+
+    return { subject: finalSubject, html, text };
+  },
+};
+
+const ROUND_STARTED: EmailTemplate = {
+  id: "round-started",
+  name: "Round started · go play",
+  description:
+    "Doors-are-open email. Sent the moment the round goes live. Big play button at the top, deadline reminder, lives reminder. Pairs with 'Round scheduled · save the date'.",
+  defaultSubject: "🚪 Round {chapterNumber} is open — go play!",
+  fields: [
+    {
+      key: "chapterNumber",
+      label: "Round / chapter number",
+      kind: "text",
+      defaultValue: "2",
+      maxLength: 8,
+    },
+    {
+      key: "roundTitle",
+      label: "Round title",
+      kind: "text",
+      defaultValue: "What's Bigger?",
+      maxLength: 80,
+    },
+    {
+      key: "deadline",
+      label: "Deadline to finish",
+      kind: "text",
+      defaultValue: "Tuesday · 9:00 PM",
+      hint: "Shown big in the urgency card.",
+      maxLength: 60,
+    },
+    {
+      key: "questionCount",
+      label: "Roughly how many questions",
+      kind: "text",
+      defaultValue: "15",
+      maxLength: 6,
+    },
+    {
+      key: "intro",
+      label: "Opener",
+      kind: "textarea",
+      defaultValue:
+        "It's go time. The round is open, the questions are loaded, and the bracket is watching. Hit the button below and you're in.",
+      rows: 3,
+      maxLength: 600,
+    },
+    {
+      key: "rules",
+      label: "Quick reminders",
+      kind: "textarea",
+      defaultValue:
+        "One attempt only — when you submit, that's your final score. Take your time within the deadline window; the clock doesn't matter, accuracy does. If you skip the round entirely, you lose a heart ❤️.",
+      rows: 3,
+      maxLength: 600,
+    },
+    {
+      key: "outro",
+      label: "Closing line",
+      kind: "textarea",
+      defaultValue: "Good luck out there.",
+      rows: 2,
+      maxLength: 240,
+    },
+  ],
+  render({ subject, fields }) {
+    const chapterNumber = getField(this, fields, "chapterNumber");
+    const roundTitle = getField(this, fields, "roundTitle");
+    const deadline = getField(this, fields, "deadline");
+    const questionCount = getField(this, fields, "questionCount");
+    const intro = getField(this, fields, "intro");
+    const rules = getField(this, fields, "rules");
+    const outro = getField(this, fields, "outro");
+    const finalSubject =
+      (subject.trim() || this.defaultSubject)
+        .replace(/\{chapterNumber\}/g, chapterNumber);
+
+    const text = [
+      "Mia's Quiz Tournament",
+      `Round ${chapterNumber} · doors are open`,
+      "(From Sam, site admin)",
+      "",
+      "Hi {firstName}!",
+      "",
+      `Round ${chapterNumber} — "${roundTitle}" — is live right now.`,
+      "",
+      intro,
+      "",
+      "→ Play now: https://quiz.miaswebsites.art/play",
+      "",
+      `Deadline: ${deadline}.`,
+      `Length: about ${questionCount} questions.`,
+      "",
+      rules,
+      "",
+      outro,
+      "",
+      "— Sam",
+      "Site administrator · Mia's Quiz Tournament",
+    ].join("\n");
+
+    const paragraph = (s: string) =>
+      `<p style="margin:0 0 14px;font-family:Quicksand,system-ui,sans-serif;font-size:16px;line-height:1.65;color:#1B2A4E;">${esc(
+        s
+      )}</p>`;
+
+    const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="color-scheme" content="light only" />
+<meta name="supported-color-schemes" content="light" />
+<title>${esc(finalSubject)}</title>
+<style>
+  @import url("https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Quicksand:wght@500;600;700&display=swap");
+</style>
+</head>
+<body style="margin:0;padding:0;background:#B7E5FF;font-family:Quicksand,system-ui,sans-serif;color:#1B2A4E;">
+  <span style="display:none!important;visibility:hidden;opacity:0;color:transparent;height:0;width:0;overflow:hidden;mso-hide:all;">Round ${esc(
+    chapterNumber
+  )} is open. ${esc(intro.slice(0, 90))}</span>
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#B7E5FF;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="width:100%;max-width:600px;background:#FFFFFF;border:4px solid #1B2A4E;border-radius:28px;box-shadow:8px 8px 0 0 #1B2A4E;">
+          <tr>
+            <td style="padding:36px 36px 8px 36px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="padding-right:14px;vertical-align:middle;">
+                    <img src="https://quiz.miaswebsites.art/email-assets/sun.gif" width="64" height="64" alt="" style="display:block;width:64px;height:64px;"/>
+                  </td>
+                  <td style="vertical-align:middle;">
+                    <p style="margin:0;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:24px;color:#1B2A4E;line-height:1;">Mia&rsquo;s Quiz Tournament</p>
+                    <p style="margin:4px 0 0;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:600;font-size:13px;color:#E94B7E;letter-spacing:.05em;text-transform:uppercase;">🚪&nbsp;The doors are open</p>
+                  </td>
+                </tr>
+              </table>
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:22px;">
+                <tr>
+                  <td align="right">
+                    <span style="display:inline-block;background:#87CEEB;color:#1B2A4E;padding:5px 14px;border-radius:999px;border:3px solid #1B2A4E;box-shadow:2px 2px 0 0 #1B2A4E;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:11px;letter-spacing:.04em;">✉️&nbsp;FROM SAM, SITE ADMIN</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:18px 36px 8px 36px;">
+              <p style="margin:0;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:600;font-size:13px;color:#3B4A7E;letter-spacing:.06em;text-transform:uppercase;">Hi {firstName} — it's go time:</p>
+              <h1 style="margin:6px 0 4px;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:40px;color:#1B2A4E;line-height:1;">📖&nbsp;Round ${esc(
+                chapterNumber
+              )} is live!</h1>
+              <p style="margin:0 0 22px;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:22px;color:#E94B7E;line-height:1.1;">${esc(
+                roundTitle
+              )}</p>
+
+              ${paragraph(intro)}
+
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:8px 0 22px;">
+                <tr>
+                  <td align="center">
+                    <a href="https://quiz.miaswebsites.art/play" style="display:inline-block;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:22px;color:#FFFFFF;text-decoration:none;background:#FF6B9D;border:3px solid #1B2A4E;border-radius:18px;box-shadow:6px 6px 0 0 #1B2A4E;padding:16px 36px;">
+                      ▶&nbsp;&nbsp;Play Round ${esc(chapterNumber)}
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 22px;background:#FFD93D;border:3px solid #1B2A4E;border-radius:16px;box-shadow:4px 4px 0 0 #1B2A4E;">
+                <tr>
+                  <td style="padding:14px 22px;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                      <tr>
+                        <td width="52" style="padding:0 12px 0 0;vertical-align:middle;">
+                          <div style="width:38px;height:38px;border-radius:999px;background:#FF6B9D;border:3px solid #1B2A4E;text-align:center;line-height:32px;font-size:18px;box-shadow:2px 2px 0 0 #1B2A4E;">🏁</div>
+                        </td>
+                        <td style="vertical-align:middle;">
+                          <p style="margin:0;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:12px;color:#3B4A7E;letter-spacing:.06em;text-transform:uppercase;">Submit before</p>
+                          <p style="margin:2px 0 0;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:20px;color:#1B2A4E;line-height:1.2;">${esc(
+                            deadline
+                          )}</p>
+                        </td>
+                        <td style="vertical-align:middle;text-align:right;">
+                          <p style="margin:0;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:12px;color:#3B4A7E;letter-spacing:.06em;text-transform:uppercase;">Length</p>
+                          <p style="margin:2px 0 0;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:20px;color:#1B2A4E;line-height:1.2;">~${esc(
+                            questionCount
+                          )} qs</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              ${paragraph(rules)}
+              ${paragraph(outro)}
+
+              <div style="margin:28px 0 8px;">
+                <p style="margin:0;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:600;font-size:16px;color:#1B2A4E;">Talk soon,</p>
+                <p style="margin:6px 0 0;font-family:Fredoka,Quicksand,system-ui,sans-serif;font-weight:700;font-size:36px;color:#E94B7E;line-height:1;">— Sam</p>
+                <p style="margin:6px 0 0;font-family:Quicksand,system-ui,sans-serif;font-size:13px;color:#3B4A7E;">Site administrator&nbsp;·&nbsp;Mia&rsquo;s Quiz Tournament</p>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0;line-height:0;font-size:0;">
+              <div style="background:#7BC4A4;border-top:3px solid #1B2A4E;height:48px;border-bottom-left-radius:24px;border-bottom-right-radius:24px;">&nbsp;</div>
+            </td>
+          </tr>
+        </table>
+        <p style="margin:18px 0 0;font-family:Quicksand,system-ui,sans-serif;font-size:11px;color:#3B4A7E;opacity:.8;">You&rsquo;re receiving this because you&rsquo;re in Mia&rsquo;s Quiz Tournament. Reply any time.</p>
+      </td>
+    </tr>
+  </table>
+</body></html>`;
+
+    return { subject: finalSubject, html, text };
+  },
+};
+
 const TEMPLATES: EmailTemplate[] = [
+  ROUND_SCHEDULED,
+  ROUND_STARTED,
   NEW_AUTH_AND_MIAMAIL,
   SCHEDULE_SHIFT_PUBLIC,
   BRACKET_UPDATE,
