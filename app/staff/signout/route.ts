@@ -29,8 +29,13 @@ export async function POST() {
     // missing). Just bounce home — there's no upstream session to clear.
     return NextResponse.redirect(`${STAFF_ORIGIN}/staff/signin`, 302);
   }
+  // returnTo must EXACTLY match an entry in the staff Auth0 app's
+  // "Allowed Logout URLs" — Auth0 doesn't pattern-match on path. We use
+  // the bare origin so the existing `https://staff.miaswebsites.art`
+  // entry covers it; the middleware then routes / → /staff → /staff/signin
+  // for unauthenticated visitors.
   const url = new URL("/v2/logout", issuer.replace(/\/$/, ""));
   url.searchParams.set("client_id", clientId);
-  url.searchParams.set("returnTo", `${STAFF_ORIGIN}/staff/signin`);
+  url.searchParams.set("returnTo", STAFF_ORIGIN);
   return NextResponse.redirect(url.toString(), 302);
 }
