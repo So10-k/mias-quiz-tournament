@@ -13,72 +13,136 @@ const auth0Enabled =
 export default async function SignInPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; email?: string }>;
+  searchParams: Promise<{ error?: string; email?: string; legacy?: string }>;
 }) {
-  const { error, email } = await searchParams;
+  const { error, email, legacy } = await searchParams;
+  // Magic-link form is hidden by default once Auth0 is live. Pass
+  // ?legacy=1 to access the old flow as a break-glass option (e.g. if
+  // Auth0 is having an outage). Not advertised on the page.
+  const showLegacy = !auth0Enabled || legacy === "1";
 
   return (
     <Stage>
-      <div className="h-[calc(100vh-128px)] flex items-center justify-center px-4">
-        <div className="w-full max-w-xl">
-          <div className="card px-7 py-7">
-            <h1 className="font-display text-4xl md:text-5xl text-navy text-center">
-              Welcome back! 👋
-            </h1>
-            <p className="font-display text-xl md:text-2xl text-navy mt-3 text-center">
-              Just your email — we&rsquo;ll send a magic link.
-            </p>
+      <div className="min-h-[calc(100vh-128px)] flex items-center justify-center px-4 py-8">
+        <div className="w-full max-w-md">
+          <div className="card px-6 py-8 md:px-9 md:py-10 relative overflow-hidden">
+            {/* Decorative corner stars (purely cosmetic) */}
+            <span
+              aria-hidden
+              className="absolute -top-3 -left-3 text-3xl select-none"
+              style={{ filter: "drop-shadow(2px 2px 0 var(--navy))" }}
+            >
+              ✨
+            </span>
+            <span
+              aria-hidden
+              className="absolute -bottom-2 -right-3 text-3xl select-none rotate-12"
+              style={{ filter: "drop-shadow(2px 2px 0 var(--navy))" }}
+            >
+              ✨
+            </span>
+
+            {/* MiaAuth lockup */}
+            <div className="flex flex-col items-center gap-3">
+              <div
+                className="w-20 h-20 rounded-2xl bg-sun border-3 border-navy flex items-center justify-center text-4xl"
+                style={{ boxShadow: "var(--shadow-pop)" }}
+              >
+                🔐
+              </div>
+              <div className="text-center">
+                <p className="font-display text-xs text-coral-deep uppercase tracking-[0.2em]">
+                  MiaAuth
+                </p>
+                <h1 className="font-display text-3xl md:text-4xl text-navy mt-1 leading-tight">
+                  Welcome back!
+                </h1>
+                <p className="font-body text-sm text-navy-soft mt-2 max-w-xs mx-auto">
+                  Sign in to play. We&rsquo;ll send a one-time code to your email
+                  — no passwords to remember.
+                </p>
+              </div>
+            </div>
 
             {auth0Enabled ? (
-              <form action={auth0SignInAction} className="mt-7 flex flex-col items-center">
+              <form
+                action={auth0SignInAction}
+                className="mt-7 flex flex-col items-center"
+              >
                 <button
                   type="submit"
-                  className="pop pop-coral text-xl"
+                  className="pop pop-coral text-xl w-full max-w-[280px] inline-flex items-center justify-center gap-2"
                 >
-                  🔐 Continue with Auth0
+                  <span>🔐</span>
+                  <span>Sign in with MiaAuth</span>
                 </button>
-                <p className="font-body text-xs text-navy-soft mt-3 text-center">
-                  Recommended — Auth0 sends the magic link and handles
-                  sign-in. Same email, same account.
+                <p className="font-body text-xs text-navy-soft mt-3 text-center max-w-xs">
+                  You&rsquo;ll get a one-time code in your inbox. Pop it in,
+                  and you&rsquo;re back.
                 </p>
-                <div className="my-5 flex items-center gap-3 w-full">
-                  <span className="h-px flex-1 bg-navy/20" />
-                  <span className="font-body text-xs text-navy-soft uppercase tracking-widest">
-                    or
-                  </span>
-                  <span className="h-px flex-1 bg-navy/20" />
-                </div>
               </form>
             ) : null}
 
-            <form action={signInAction} className="mt-2 flex flex-col gap-5">
-              <label className="flex flex-col gap-2">
-                <span className="font-display text-xl text-navy">Email</span>
-                <input
-                  name="email"
-                  type="email"
-                  required
-                  maxLength={254}
-                  autoComplete="email"
-                  defaultValue={email ?? ""}
-                  autoFocus
-                  placeholder="grown-up@email.com"
-                />
-              </label>
+            {/* Trust badges */}
+            <div className="mt-7 grid grid-cols-3 gap-2 text-center">
+              <div className="card-sm bg-white px-2 py-2">
+                <p className="font-display text-base">🛡️</p>
+                <p className="font-body text-[10px] text-navy-soft uppercase tracking-widest mt-1 leading-tight">
+                  Bank-grade
+                </p>
+              </div>
+              <div className="card-sm bg-white px-2 py-2">
+                <p className="font-display text-base">🔑</p>
+                <p className="font-body text-[10px] text-navy-soft uppercase tracking-widest mt-1 leading-tight">
+                  No passwords
+                </p>
+              </div>
+              <div className="card-sm bg-white px-2 py-2">
+                <p className="font-display text-base">⚡️</p>
+                <p className="font-body text-[10px] text-navy-soft uppercase tracking-widest mt-1 leading-tight">
+                  10s sign-in
+                </p>
+              </div>
+            </div>
 
-              {error ? (
-                <p className="font-display text-coral-deep">⚠️ {error}</p>
-              ) : null}
+            <p className="font-body text-[11px] text-navy-soft text-center mt-5 leading-relaxed">
+              Sign-in is powered by <strong>Auth0 by Okta</strong> — the same
+              identity platform used by Fortune 500 companies, healthcare
+              systems and banks. Your email never touches our servers without
+              MFA-grade protection. ✨
+            </p>
 
-              <button
-                type="submit"
-                className="pop pop-white text-base mt-2 self-center"
-              >
-                ✉️ Email me a magic link (legacy)
-              </button>
-            </form>
+            {showLegacy ? (
+              <div className="mt-8 pt-6 border-t-2 border-dashed border-navy/15">
+                <p className="font-body text-xs text-navy-soft text-center mb-3">
+                  Break-glass: legacy sign-in flow
+                </p>
+                <form action={signInAction} className="flex flex-col gap-3">
+                  <input
+                    name="email"
+                    type="email"
+                    required
+                    maxLength={254}
+                    autoComplete="email"
+                    defaultValue={email ?? ""}
+                    placeholder="your@email.com"
+                  />
+                  {error ? (
+                    <p className="font-body text-sm text-coral-deep">
+                      ⚠️ {error}
+                    </p>
+                  ) : null}
+                  <button
+                    type="submit"
+                    className="pop pop-white text-sm self-center"
+                  >
+                    ✉️ Email me a magic link (legacy)
+                  </button>
+                </form>
+              </div>
+            ) : null}
 
-            <p className="mt-7 text-base text-navy-soft font-body text-center">
+            <p className="mt-7 text-sm text-navy-soft font-body text-center">
               New here?{" "}
               <Link
                 href="/join"
@@ -88,6 +152,10 @@ export default async function SignInPage({
               </Link>
             </p>
           </div>
+
+          <p className="font-body text-[10px] text-navy-soft text-center mt-3 opacity-70">
+            🌞 Mia&rsquo;s Quiz Tournament · MiaAuth v1
+          </p>
         </div>
       </div>
     </Stage>
