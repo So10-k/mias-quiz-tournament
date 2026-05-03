@@ -279,16 +279,18 @@ export function ChapterRunner({
         </div>
       ) : null}
 
-      {/* progress dots */}
+      {/* Progress dots — purely display-only. Were clickable previously but
+          the back-and-forth navigation gave players a way to reset the
+          per-question timer by leaving and re-entering. Once you commit
+          (timer expires or you click Next/Done), there's no going back. */}
       <div className="flex items-center justify-center gap-2 mb-5">
         {questions.map((_, i) => {
           const ans = !!picks[questions[i].id];
           const here = page === i;
           return (
-            <button
+            <span
               key={i}
-              onClick={() => setPage(i)}
-              aria-label={`Question ${i + 1}`}
+              aria-label={`Question ${i + 1}${here ? " (current)" : ans ? " (answered)" : ""}`}
               className={
                 "w-4 h-4 rounded-full border-2 border-navy " +
                 (here ? "bg-coral" : ans ? "bg-grass" : "bg-white")
@@ -406,19 +408,15 @@ export function ChapterRunner({
               </p>
             ) : null}
 
-            <div className="mt-7 flex items-center justify-between gap-3">
-              <button
-                onClick={() => setPage(page - 1)}
-                className="pop pop-white"
-                disabled={page === 0 && !intro}
-              >
-                ← Back
-              </button>
+            {/* Forward-only navigation. No Back button — once you land on a
+                question, the only way out is Next (after picking) or letting
+                the 15s timer expire. Removing the button is the simplest
+                way to guarantee you can't game the timer by leaving and
+                coming back to it. */}
+            <div className="mt-7 flex items-center justify-end gap-3">
               {page < last ? (
                 <button
                   onClick={() => {
-                    // Manual advance also locks — moving forward means
-                    // committing your answer, same as the timer running out.
                     const qid = questions[page].id;
                     if (!lockedQuestions[qid]) {
                       setLockedQuestions((prev) => ({ ...prev, [qid]: true }));
@@ -426,7 +424,11 @@ export function ChapterRunner({
                     setPage(page + 1);
                   }}
                   className="pop pop-coral"
-                  disabled={!picks[questions[page].id]}
+                  // Allow advancing if the question is locked (review mode
+                  // via "Look again") even without a pick — otherwise a
+                  // question whose timer expired with no answer would
+                  // strand the user.
+                  disabled={!picks[questions[page].id] && !currentLocked}
                 >
                   Next →
                 </button>
@@ -440,7 +442,7 @@ export function ChapterRunner({
                     setPage(last + 1);
                   }}
                   className="pop pop-grass"
-                  disabled={!picks[questions[page].id]}
+                  disabled={!picks[questions[page].id] && !currentLocked}
                 >
                   Done!
                 </button>
