@@ -20,6 +20,13 @@ export default async function SignInPage({
   // ?legacy=1 to access the old flow as a break-glass option (e.g. if
   // Auth0 is having an outage). Not advertised on the page.
   const showLegacy = !auth0Enabled || legacy === "1";
+  // Auth.js redirects here with ?error=AccessDenied when the signIn
+  // callback returns false — that's how we surface "registration closed
+  // for new players." Map known error codes to friendlier copy.
+  const friendlyError =
+    error === "AccessDenied"
+      ? "Registration's closed for now — only existing players can sign in. If you think you should already have an account, double-check the email address."
+      : error;
 
   return (
     <Stage>
@@ -63,6 +70,12 @@ export default async function SignInPage({
                 </p>
               </div>
             </div>
+
+            {friendlyError ? (
+              <div className="mt-6 card-sm bg-coral text-white px-4 py-3 text-center">
+                <p className="font-display text-sm">⚠️ {friendlyError}</p>
+              </div>
+            ) : null}
 
             {auth0Enabled ? (
               <form
@@ -127,7 +140,11 @@ export default async function SignInPage({
                     defaultValue={email ?? ""}
                     placeholder="your@email.com"
                   />
-                  {error ? (
+                  {/* Legacy form errors are surfaced inline by signInAction
+                      via the `?error=` param. The friendlyError block at
+                      the top of the card already shows known codes; this
+                      shows raw legacy errors only. */}
+                  {error && error !== "AccessDenied" ? (
                     <p className="font-body text-sm text-coral-deep">
                       ⚠️ {error}
                     </p>
