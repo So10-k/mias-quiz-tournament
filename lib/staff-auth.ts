@@ -1,8 +1,18 @@
 // Staff portal auth — totally separate from the user/Auth.js stack.
-// Custom OIDC client against Duo SSO. JIT-provisions a `staff_users` row
-// on first successful auth; subsequent visits use a `staff_session`
-// cookie. No SCIM yet — Duo Premier supports it, but for a small team
-// JIT is simpler and any user provisioned in Duo gets in on first login.
+// Custom OIDC client. We point this at a SECOND Auth0 application
+// dedicated to staff (separate from the player passwordless app), with
+// Auth0 Organizations + Duo MFA configured upstream so:
+//   • only invited members of the `staff` org can sign in at all
+//   • Duo Push is required as an MFA factor before a token is minted
+// All of those gates run in Auth0 — by the time we see the id_token
+// here, those checks have already passed. The org_id verification below
+// is defense-in-depth: we re-assert the claim matches the expected org
+// so a misconfiguration upstream can't widen access.
+//
+// JIT-provisions a `staff_users` row on first successful auth; subsequent
+// visits use a `staff_session` cookie. To deactivate someone, remove
+// them from the org in Auth0 — they'll stop being able to renew the
+// session next time it expires.
 
 import { createHash, randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
@@ -21,25 +31,41 @@ const STATE_TTL_MS = 10 * 60 * 1000; // 10m
 const STAFF_ORIGIN =
   process.env.STAFF_ORIGIN ?? "https://staff.miaswebsites.art";
 
-export type DuoConfig = {
+export type StaffOidcConfig = {
   clientId: string;
   clientSecret: string;
-  issuer: string; // e.g. https://sso-xxx.sso.duosecurity.com/oidc/...
+  issuer: string;
   redirectUri: string;
+  /** Optional: when set, the id_token must include this `org_id` claim
+   *  or the sign-in is rejected. Defense in depth on top of Auth0's own
+   *  organization gating. */
+  expectedOrgId: string | null;
 };
 
-export function duoConfig(): DuoConfig | null {
-  const clientId = process.env.DUO_CLIENT_ID;
-  const clientSecret = process.env.DUO_CLIENT_SECRET;
-  const issuer = process.env.DUO_ISSUER;
+// Reads the staff OIDC config. Prefers the new AUTH_AUTH0_STAFF_* env
+// vars; falls back to the legacy DUO_* vars so the previous Duo SSO
+// OIDC config still works during a rollback window. Returns null if
+// neither is configured — the staff portal then shows a "set up env
+// vars" message instead of attempting a broken redirect.
+export function staffOidcConfig(): StaffOidcConfig | null {
+  const clientId =
+    process.env.AUTH_AUTH0_STAFF_ID ?? process.env.DUO_CLIENT_ID;
+  const clientSecret =
+    process.env.AUTH_AUTH0_STAFF_SECRET ?? process.env.DUO_CLIENT_SECRET;
+  const issuer =
+    process.env.AUTH_AUTH0_STAFF_ISSUER ?? process.env.DUO_ISSUER;
   if (!clientId || !clientSecret || !issuer) return null;
   return {
     clientId,
     clientSecret,
     issuer: issuer.replace(/\/$/, ""),
     redirectUri: `${STAFF_ORIGIN}/api/auth/staff/callback`,
+    expectedOrgId: process.env.AUTH_AUTH0_STAFF_ORG_ID ?? null,
   };
 }
+
+/** @deprecated kept as an alias so older imports don't break. */
+export const duoConfig = staffOidcConfig;
 
 type Discovery = {
   authorization_endpoint: string;
@@ -50,17 +76,21 @@ type Discovery = {
 };
 let discoveryCache: { v: Discovery; expiresAt: number } | null = null;
 
-export async function discoverDuo(cfg: DuoConfig): Promise<Discovery> {
+export async function discoverStaffOidc(
+  cfg: StaffOidcConfig
+): Promise<Discovery> {
   if (discoveryCache && discoveryCache.expiresAt > Date.now())
     return discoveryCache.v;
   const url = `${cfg.issuer}/.well-known/openid-configuration`;
   const res = await fetch(url);
-  if (!res.ok)
-    throw new Error(`Duo discovery failed: ${res.status} ${url}`);
+  if (!res.ok) throw new Error(`OIDC discovery failed: ${res.status} ${url}`);
   const v = (await res.json()) as Discovery;
   discoveryCache = { v, expiresAt: Date.now() + 60 * 60 * 1000 };
   return v;
 }
+
+/** @deprecated alias retained for older callers. */
+export const discoverDuo = discoverStaffOidc;
 
 // PKCE — Duo SSO requires (or strongly prefers) it.
 function pkce(): { verifier: string; challenge: string } {
@@ -72,9 +102,9 @@ function pkce(): { verifier: string; challenge: string } {
 }
 
 export async function startSignin(args: { next?: string }): Promise<string> {
-  const cfg = duoConfig();
-  if (!cfg) throw new Error("Duo OIDC env vars missing");
-  const disco = await discoverDuo(cfg);
+  const cfg = staffOidcConfig();
+  if (!cfg) throw new Error("Staff OIDC env vars missing");
+  const disco = await discoverStaffOidc(cfg);
   const state = randomBytes(16).toString("base64url");
   const nonce = randomBytes(16).toString("base64url");
   const { verifier, challenge } = pkce();
@@ -100,6 +130,12 @@ export async function startSignin(args: { next?: string }): Promise<string> {
   u.searchParams.set("nonce", nonce);
   u.searchParams.set("code_challenge", challenge);
   u.searchParams.set("code_challenge_method", "S256");
+  // If we know the expected org, hint the authorize endpoint so Auth0
+  // routes the user straight into that org's login. Without this, Auth0
+  // shows an "enter your org name" picker for org-required apps.
+  if (cfg.expectedOrgId) {
+    u.searchParams.set("organization", cfg.expectedOrgId);
+  }
   return u.toString();
 }
 
@@ -107,9 +143,9 @@ export async function completeSignin(req: {
   code: string;
   state: string;
 }): Promise<{ next: string } | { error: string }> {
-  const cfg = duoConfig();
-  if (!cfg) return { error: "Duo OIDC env vars missing" };
-  const disco = await discoverDuo(cfg);
+  const cfg = staffOidcConfig();
+  if (!cfg) return { error: "staff OIDC env vars missing" };
+  const disco = await discoverStaffOidc(cfg);
   const cookieJar = await cookies();
   const stateCookie = cookieJar.get(STATE_COOKIE);
   if (!stateCookie) return { error: "missing-state" };
@@ -161,6 +197,23 @@ export async function completeSignin(req: {
     };
   }
   if (payload.nonce !== parsed.nonce) return { error: "nonce-mismatch" };
+
+  // Org gate (defense-in-depth). Auth0 includes `org_id` in id_tokens
+  // when the user signs in through an organization context. If we've
+  // configured an expected org id, fail closed when it doesn't match —
+  // even if Auth0's app-level "org required" config gets accidentally
+  // widened later.
+  if (cfg.expectedOrgId) {
+    const tokenOrg = (payload as { org_id?: string }).org_id ?? null;
+    if (!tokenOrg) {
+      return { error: "missing-org-claim (user not in any org context)" };
+    }
+    if (tokenOrg !== cfg.expectedOrgId) {
+      return {
+        error: `org-mismatch (expected ${cfg.expectedOrgId}, got ${tokenOrg})`,
+      };
+    }
+  }
 
   const subj = String(payload.sub ?? "");
   let email = String(payload.email ?? "").toLowerCase();
