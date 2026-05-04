@@ -462,23 +462,30 @@ export async function syncEliminationFromBracket(tournamentId: string) {
     .from(enrollments)
     .where(eq(enrollments.tournamentId, tournamentId));
 
-  // A player is "still in" iff there exists at least one matchup containing
-  // them where they HAVEN'T been definitively beaten — i.e. the matchup is
-  // unresolved (winnerUserId === null) OR they're the winner of it. This
-  // is computed PER-PLAYER over the whole matchup list, not incrementally,
-  // so a main-R1 loss doesn't override a still-alive losers-bracket
-  // seating that appears earlier in the iteration order.
+  // A player is "still in" iff they are currently seated in at least one
+  // UNRESOLVED matchup. We rely on propagateWinners to correctly seat
+  // winners into their next-round matchup and main-R1 losers into the LB,
+  // so this single condition covers everything:
+  //
+  //   • You won R1, propagateWinners put you in R2 → if R2 is unresolved
+  //     and you're seated, you're in. If R2 already resolved against you
+  //     and there's no LB seat, you're out.
+  //   • You lost main R1, propagateWinners routed you to LB R1 → if LB
+  //     R1 is unresolved, you're in.
+  //   • You lost LB at any round → no further matchup seats you, you're
+  //     out.
+  //   • You're a forgotten old-round winner with no current seating →
+  //     out (you got eliminated downstream).
+  //
+  // Don't be tempted to add "is winner of a resolved matchup" as an
+  // OR — that's the bug we just fixed. A R1 winner who lost in R2 is
+  // OUT, not still alive because of their old win.
   function isStillIn(userId: string): boolean {
     for (const m of ms) {
       const onA = m.playerAUserId === userId;
       const onB = m.playerBUserId === userId;
       if (!onA && !onB) continue;
-      // Unresolved matchup containing them → not out.
       if (!m.winnerUserId) return true;
-      // Resolved AND they won it → not out.
-      if (m.winnerUserId === userId) return true;
-      // Otherwise they lost this one — keep looking for another matchup
-      // where they survive (e.g. losers bracket).
     }
     return false;
   }
