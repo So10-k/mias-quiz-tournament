@@ -65,6 +65,16 @@ export function ChapterRunner({
 
   const last = questions.length - 1;
   const allAnswered = questions.every((q) => picks[q.id]);
+  // A question is "settled" if the player either picked or its timer
+  // ran out. At the confirm page every question SHOULD be settled —
+  // forward-only nav means you can't reach confirm otherwise. Skipped
+  // count = settled-but-not-picked (timer expired with no choice).
+  const skippedCount = questions.filter(
+    (q) => !picks[q.id] && lockedQuestions[q.id]
+  ).length;
+  const allSettled = questions.every(
+    (q) => !!picks[q.id] || !!lockedQuestions[q.id]
+  );
   const onQuestion = page >= 0 && page <= last;
   const currentQ = onQuestion ? questions[page] : null;
   const currentLocked = !!(currentQ && lockedQuestions[currentQ.id]);
@@ -458,13 +468,19 @@ export function ChapterRunner({
             transition={{ duration: 0.18 }}
             className="card px-7 py-7 text-center"
           >
-            <div className="text-6xl bob">{allAnswered ? "🎯" : "🤔"}</div>
+            <div className="text-6xl bob">
+              {skippedCount > 0 ? "⏰" : "🎯"}
+            </div>
             <h2 className="font-display text-3xl md:text-4xl text-navy mt-3">
-              {allAnswered ? "Ready to send your answers?" : "Hmm — one more!"}
+              {skippedCount > 0
+                ? "Time ran out on a few — that's okay."
+                : "Ready to send your answers?"}
             </h2>
-            {!allAnswered ? (
+            {skippedCount > 0 ? (
               <p className="font-body text-lg text-navy-soft mt-3">
-                You haven&rsquo;t answered every question yet.
+                {skippedCount} question{skippedCount === 1 ? "" : "s"} closed
+                before you picked — {skippedCount === 1 ? "it counts" : "they count"}{" "}
+                as wrong. Send when ready.
               </p>
             ) : (
               <p className="font-body text-lg text-navy-soft mt-3">
@@ -478,7 +494,7 @@ export function ChapterRunner({
               <button
                 onClick={onSubmit}
                 className="pop pop-coral text-xl"
-                disabled={!allAnswered || submitting}
+                disabled={!allSettled || submitting}
               >
                 {submitting ? "Sending…" : "📨 Send it!"}
               </button>
