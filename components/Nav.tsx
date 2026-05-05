@@ -186,6 +186,7 @@ async function StaffNav() {
   const canViewPredictions = staffCan(role, "predictions:read");
   const canViewEmails = staffCan(role, "emails:read");
   const canViewAttempts = staffCan(role, "attempts:read");
+  const canViewForms = staffCan(role, "forms:read");
   const canManageStaff = staffCan(role, "staff:read");
   const canViewAudit = staffCan(role, "audit:read");
 
@@ -217,6 +218,9 @@ async function StaffNav() {
       ) : null}
       {canViewEmails ? (
         <Link href="/staff/emails" className={linkBase}>Emails</Link>
+      ) : null}
+      {canViewForms ? (
+        <Link href="/staff/forms" className={linkBase}>Forms</Link>
       ) : null}
       {canViewVisitors ? (
         <Link href="/staff/visitors" className={linkBase}>Visitors</Link>
@@ -281,6 +285,9 @@ async function StaffNav() {
       ) : null}
       {canViewEmails ? (
         <Link href="/staff/emails" className={drawerLink}>📨 Emails</Link>
+      ) : null}
+      {canViewForms ? (
+        <Link href="/staff/forms" className={drawerLink}>📝 Forms</Link>
       ) : null}
       {canViewVisitors ? (
         <Link href="/staff/visitors" className={drawerLink}>👀 Visitors</Link>
