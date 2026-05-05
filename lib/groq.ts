@@ -77,14 +77,37 @@ export async function generateDailyQuestion(args: {
   recentQuestionPrompts?: string[];
 }): Promise<GeneratedQuestion> {
   const recent = args.recentQuestionPrompts?.length
-    ? `\n\nDon't repeat or closely echo these recent questions:\n- ${args.recentQuestionPrompts.slice(0, 14).join("\n- ")}`
+    ? `\n\nDO NOT USE OR PARAPHRASE any of these previously-used or just-rejected questions. The new question must be on a DIFFERENT topic and have a noticeably different stem (no rewording the same idea):\n- ${args.recentQuestionPrompts.slice(0, 30).join("\n- ")}\n\nIf any of your draft prompts shares the core subject matter (same animal, same landmark, same comparison) with an item above, pick a different subject.`
     : "";
   const seed = args.recommendation
-    ? `Suggested topic from a player: "${args.recommendation}".`
+    ? `Suggested topic from a player: "${args.recommendation}". Use it as inspiration if it's fresh; if it overlaps with the avoid list above, choose a different angle on it or a different topic entirely.`
     : "No specific suggestion today — pick a fun, age-fair topic on your own.";
   const ctx = args.currentEventsContext
     ? `\n\nContext (recent news / cultural moments — use only if it fits naturally and stays family-friendly):\n${args.currentEventsContext.slice(0, 2000)}`
     : "";
+
+  // A coarse randomiser nudges Groq toward different subject domains
+  // across regenerations, even when the avoid list is small. Without
+  // this, the model gravitates to its favourites (camouflage animals,
+  // tallest mountain, etc.) regardless of "don't repeat" prompts.
+  const palette = [
+    "weird animal",
+    "ancient food",
+    "geography surprise",
+    "nature trivia",
+    "household physics",
+    "human body",
+    "ocean life",
+    "weather",
+    "musical instruments",
+    "tool / invention",
+    "color / light",
+    "outer space",
+    "plants",
+    "smells / tastes",
+    "language origins",
+  ];
+  const nudge = palette[Math.floor(Math.random() * palette.length)];
 
   const system = [
     "You write a 'Question of the Day' for a small family quiz tournament. Players range from a 7-year-old (Mia) to grandparents in their 90s.",
@@ -94,6 +117,7 @@ export async function generateDailyQuestion(args: {
     "• Tone: warm, curious, gentle humor. Picture-book vibe.",
     "• AVOID: politics, religion, anything sad or scary, anything that requires reading skill above ~5th grade.",
     "• PREFER: nature, food, geography, science, animals, simple history, riddles, comparisons.",
+    `• Today, lean toward this domain: ${nudge}. (Soft hint — switch if it overlaps with the avoid list.)`,
     "• You MUST output strict JSON: {\"prompt\":string,\"options\":[{\"label\":string,\"value\":\"A\"|\"B\"|\"C\"|\"D\"}],\"rationale\":string}",
     "• Don't mark a 'correct' answer — this is a fun discussion question, not a quiz; players should feel free to disagree.",
   ].join("\n");
@@ -107,7 +131,7 @@ export async function generateDailyQuestion(args: {
       { role: "user", content: user },
     ],
     responseFormat: "json_object",
-    temperature: 0.85,
+    temperature: 1.0,
     maxTokens: 800,
   });
 

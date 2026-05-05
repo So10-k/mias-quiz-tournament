@@ -388,6 +388,12 @@ export async function regenerateDailyQuestion(args: {
   const forDate = args.forDate ?? todayKey();
   const existing = await getQuestionForDate(forDate);
   let lostResponses = 0;
+  // Capture what we're throwing out BEFORE the delete so we can pass it
+  // to Groq as a "must not use" — otherwise the regenerated question
+  // can land on the exact same prompt we just rejected (the recent-
+  // prompts query no longer sees it once we delete the row).
+  const justThrewOut = existing?.prompt ?? null;
+  const justThrewOutOptions = existing?.options ?? null;
 
   if (existing) {
     const [c] = await db
@@ -396,8 +402,6 @@ export async function regenerateDailyQuestion(args: {
       .where(eq(qotdResponses.questionId, existing.id));
     lostResponses = c?.n ?? 0;
 
-    // Revert the seeding rec so the queue isn't permanently consumed
-    // by a thrown-out question.
     if (existing.basedOnRecommendationId) {
       await db
         .update(qotdRecommendations)
@@ -408,9 +412,23 @@ export async function regenerateDailyQuestion(args: {
     await db.delete(qotdQuestions).where(eq(qotdQuestions.id, existing.id));
   }
 
+  // Build the avoid list: the literal prompt we just rejected + the option
+  // labels (so Groq doesn't keep the same answer set with a paraphrased
+  // stem). The regular generate path picks up these via extraAvoidPrompts.
+  const extraAvoid: string[] = [];
+  if (justThrewOut) extraAvoid.push(justThrewOut);
+  if (justThrewOutOptions) {
+    extraAvoid.push(
+      `[options just rejected: ${justThrewOutOptions
+        .map((o) => o.label)
+        .join(" / ")}]`
+    );
+  }
+
   const result = await generateAndStoreDailyQuestion({
     forDate,
     currentEventsContext: args.currentEventsContext,
+    extraAvoidPrompts: extraAvoid,
   });
   if (!result.created) {
     return result;
@@ -426,6 +444,11 @@ export async function regenerateDailyQuestion(args: {
 export async function generateAndStoreDailyQuestion(args: {
   forDate?: string;
   currentEventsContext?: string | null;
+  // When set, these prompts are added to the "must not use" list passed
+  // to Groq. Used by regenerateDailyQuestion to ensure the rejected
+  // question doesn't get re-generated verbatim — the recent-prompts
+  // query no longer sees the deleted row, so we have to hand-feed it.
+  extraAvoidPrompts?: string[];
 }): Promise<
   | { created: true; questionId: string }
   | { created: false; reason: string }
@@ -438,11 +461,13 @@ export async function generateAndStoreDailyQuestion(args: {
   }
 
   const rec = await pickNextRecommendation();
-  const recent = await getRecentQuestions(14);
+  const recent = await getRecentQuestions(28);
+  const recentPrompts = recent.map((r) => r.prompt);
+  const avoidList = [...(args.extraAvoidPrompts ?? []), ...recentPrompts];
   const generated = await generateDailyQuestion({
     recommendation: rec?.topic,
     currentEventsContext: args.currentEventsContext ?? null,
-    recentQuestionPrompts: recent.map((r) => r.prompt),
+    recentQuestionPrompts: avoidList,
   });
 
   const questionId = makeId();
