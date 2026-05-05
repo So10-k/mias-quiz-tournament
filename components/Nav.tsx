@@ -67,6 +67,12 @@ async function PlayerNav() {
           📬 Miamail
         </Link>
       ) : null}
+      <Link
+        href="/qotd"
+        className="pop pop-yellow text-base px-3 py-2 rounded-xl"
+      >
+        💡 QOTD
+      </Link>
       {isHost ? (
         <Link
           href="/host"
@@ -121,6 +127,12 @@ async function PlayerNav() {
           📬 Miamail
         </Link>
       ) : null}
+      <Link
+        href="/qotd"
+        className="pop pop-yellow text-base w-full text-left px-4 py-3 rounded-xl"
+      >
+        💡 Question of the Day
+      </Link>
       {isHost ? (
         <Link
           href="/host"
@@ -222,6 +234,9 @@ async function StaffNav() {
       {canViewForms ? (
         <Link href="/staff/forms" className={linkBase}>Forms</Link>
       ) : null}
+      {canViewForms ? (
+        <Link href="/staff/qotd" className={linkBase}>QOTD</Link>
+      ) : null}
       {canViewVisitors ? (
         <Link href="/staff/visitors" className={linkBase}>Visitors</Link>
       ) : null}
@@ -288,6 +303,9 @@ async function StaffNav() {
       ) : null}
       {canViewForms ? (
         <Link href="/staff/forms" className={drawerLink}>📝 Forms</Link>
+      ) : null}
+      {canViewForms ? (
+        <Link href="/staff/qotd" className={drawerLink}>💡 QOTD</Link>
       ) : null}
       {canViewVisitors ? (
         <Link href="/staff/visitors" className={drawerLink}>👀 Visitors</Link>
