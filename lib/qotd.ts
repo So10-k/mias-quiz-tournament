@@ -272,6 +272,101 @@ export async function recordResponse(args: {
   return { ok: true, id, cleaned: otherClean };
 }
 
+// ─── re-review of existing data ───────────────────────────────────────
+// Re-runs the safeguard on every "other" response and pending
+// recommendation. Used after we tighten the safeguard prompt or the
+// blocklist — anything that snuck through earlier gets caught here.
+
+export async function rereviewAll(): Promise<{
+  responsesReviewed: number;
+  responsesNewlyHidden: number;
+  responsesUnhidden: number;
+  recsReviewed: number;
+  recsNewlyRejected: number;
+}> {
+  let responsesReviewed = 0;
+  let responsesNewlyHidden = 0;
+  let responsesUnhidden = 0;
+  let recsReviewed = 0;
+  let recsNewlyRejected = 0;
+
+  const otherResponses = await db
+    .select()
+    .from(qotdResponses)
+    .where(eq(qotdResponses.choice, "other"));
+  for (const r of otherResponses) {
+    responsesReviewed++;
+    const probe = r.otherTextRaw ?? r.otherTextClean ?? "";
+    if (!probe) continue;
+    let verdict: SafeguardVerdict;
+    try {
+      verdict = await safeguardText(probe, "response");
+    } catch {
+      continue;
+    }
+    if (verdict.decision === "block") {
+      if (!r.hidden) {
+        await db
+          .update(qotdResponses)
+          .set({ hidden: true })
+          .where(eq(qotdResponses.id, r.id));
+        responsesNewlyHidden++;
+      }
+    } else {
+      const newClean =
+        verdict.decision === "clean" && verdict.cleanText
+          ? verdict.cleanText
+          : (r.otherTextRaw ?? r.otherTextClean ?? "").slice(0, 200);
+      const updates: Record<string, unknown> = { otherTextClean: newClean };
+      if (r.hidden) {
+        updates.hidden = false;
+        responsesUnhidden++;
+      }
+      await db
+        .update(qotdResponses)
+        .set(updates)
+        .where(eq(qotdResponses.id, r.id));
+    }
+  }
+
+  const pending = await db
+    .select()
+    .from(qotdRecommendations)
+    .where(eq(qotdRecommendations.status, "pending"));
+  for (const rec of pending) {
+    recsReviewed++;
+    let verdict: SafeguardVerdict;
+    try {
+      verdict = await safeguardText(rec.topic, "recommendation");
+    } catch {
+      continue;
+    }
+    if (verdict.decision === "block") {
+      await db
+        .update(qotdRecommendations)
+        .set({
+          status: "rejected",
+          rejectionReason: verdict.reason ?? "rejected on rereview",
+        })
+        .where(eq(qotdRecommendations.id, rec.id));
+      recsNewlyRejected++;
+    } else if (verdict.decision === "clean" && verdict.cleanText) {
+      await db
+        .update(qotdRecommendations)
+        .set({ topic: verdict.cleanText })
+        .where(eq(qotdRecommendations.id, rec.id));
+    }
+  }
+
+  return {
+    responsesReviewed,
+    responsesNewlyHidden,
+    responsesUnhidden,
+    recsReviewed,
+    recsNewlyRejected,
+  };
+}
+
 // ─── orchestration — daily generation ────────────────────────────────
 
 export async function generateAndStoreDailyQuestion(args: {

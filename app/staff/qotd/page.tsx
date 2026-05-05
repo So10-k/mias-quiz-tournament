@@ -10,6 +10,7 @@ import {
   generateAndStoreDailyQuestion,
   rejectRecommendation,
   listAllResponsesForStaff,
+  rereviewAll,
   todayKey,
 } from "@/lib/qotd";
 import { fetchCurrentEventsContext } from "@/lib/brave";
@@ -66,6 +67,26 @@ async function rejectRecAction(formData: FormData) {
     details: { reason },
   });
   revalidatePath("/staff/qotd");
+}
+
+async function rereviewAction() {
+  "use server";
+  const me = await requireStaff({
+    next: "/staff/qotd",
+    permission: "forms:write",
+  });
+  const stats = await rereviewAll();
+  await logStaffAction({
+    actor: { id: me.id, email: me.email },
+    action: "qotd.rereview",
+    details: stats,
+  });
+  revalidatePath("/staff/qotd");
+  redirect(
+    `/staff/qotd?ok=${encodeURIComponent(
+      `re-reviewed ${stats.responsesReviewed} resp · hid ${stats.responsesNewlyHidden} · unhid ${stats.responsesUnhidden} · rejected ${stats.recsNewlyRejected}/${stats.recsReviewed} recs`
+    )}`
+  );
 }
 
 async function hideResponseAction(formData: FormData) {
@@ -177,15 +198,26 @@ export default async function StaffQotdPage({
               No question for today yet.
             </p>
           )}
-          <form action={generateNowAction}>
-            <button className="pop pop-coral text-sm">
-              {today ? "🔄 Re-generate (skips if exists)" : "⚡ Generate now"}
-            </button>
-          </form>
+          <div className="flex flex-wrap gap-2">
+            <form action={generateNowAction}>
+              <button className="pop pop-coral text-sm">
+                {today ? "🔄 Re-generate (skips if exists)" : "⚡ Generate now"}
+              </button>
+            </form>
+            <form action={rereviewAction}>
+              <button
+                className="pop pop-yellow text-sm"
+                title="Re-run safeguard on all existing responses + recommendations"
+              >
+                🛡️ Re-review existing data
+              </button>
+            </form>
+          </div>
           <p className="font-body text-xs text-navy-soft">
             Auto-runs daily at 11:00 UTC (~6–7am ET) via Vercel Cron. Manual
-            trigger above is idempotent — won&rsquo;t overwrite an existing
-            question for the same date.
+            generate is idempotent — won&rsquo;t overwrite. Re-review fires
+            the safeguard prompt against everything already in the DB; use
+            it after tightening the safeguard rules to catch stragglers.
           </p>
         </section>
 

@@ -135,6 +135,65 @@ export type SafeguardVerdict = {
   reason?: string;
 };
 
+// Hard blocklist — obvious sexual / profane / slur terms. Belt-and-
+// suspenders before the LLM safeguard call so even if the model is
+// squishy or the API errors, the worst stuff doesn't reach a 7-year-old.
+const HARD_BLOCKLIST: string[] = [
+  // sexual / anatomical (explicit)
+  "penis",
+  "vagina",
+  "dick",
+  "cock",
+  "pussy",
+  "boob",
+  "tit",
+  "cum",
+  "jizz",
+  "horny",
+  "sexy",
+  "porn",
+  "blowjob",
+  "handjob",
+  // profanity
+  "fuck",
+  "shit",
+  "bitch",
+  "cunt",
+  "asshole",
+  "bastard",
+  // slurs (any)
+  "retard",
+  " fag",
+  "faggot",
+  "n-word",
+  // self-harm
+  "kill myself",
+  "kms",
+  "suicid",
+];
+
+function hardBlockHit(text: string): string | null {
+  // Normalise: lowercase, strip zero-width, collapse common letter-spacing
+  // tricks (p e n i s), basic leetspeak (p3n1s), and punctuation between
+  // letters (p.e.n.i.s).
+  const t = text
+    .toLowerCase()
+    .replace(/[​-‍﻿]/g, "")
+    .replace(/[*_\-.\s]+(?=\w)/g, "")
+    .replace(/0/g, "o")
+    .replace(/1/g, "i")
+    .replace(/3/g, "e")
+    .replace(/4/g, "a")
+    .replace(/5/g, "s")
+    .replace(/@/g, "a")
+    .replace(/\$/g, "s");
+  for (const term of HARD_BLOCKLIST) {
+    const needle = term.toLowerCase().replace(/\s/g, "");
+    if (t.includes(needle)) return term.trim();
+  }
+  return null;
+}
+
 export async function safeguardText(
   text: string,
   context: "recommendation" | "response"
@@ -145,34 +204,87 @@ export async function safeguardText(
     return { decision: "block", reason: "too long" };
   }
 
+  // Hard blocklist FIRST — if it hits, never even ask the LLM. Catches
+  // cases where the model returns "safe" on borderline-explicit slang.
+  const hit = hardBlockHit(trimmed);
+  if (hit) {
+    return {
+      decision: "block",
+      reason: `contains blocked term (${hit})`,
+    };
+  }
+
   const system = [
-    "You moderate text submitted by players in a family quiz tournament that includes a 7-year-old.",
+    "You moderate text submitted by players in a SMALL FAMILY quiz tournament that INCLUDES A 7-YEAR-OLD CHILD.",
+    "Audience age range: 7 to 90. Treat this like moderating a children's-book comment section.",
     `Submission type: ${
       context === "recommendation"
         ? "a suggested topic for a future daily question"
         : "an 'Other' response to today's daily question"
     }.`,
-    "Tasks:",
-    "1. Decide one of: 'safe' (good as-is), 'clean' (remove or rephrase a small part — e.g. typos, light profanity, awkward phrasing — and return polished text), or 'block' (reject — hate, sexual content, threats, instructions for harm, age-inappropriate, spam, advertising, personal data of others).",
-    "2. If 'clean', return polished text that keeps the player's intent but reads tidily and respectfully. Limit to 200 chars.",
-    "3. Output strict JSON: {\"decision\":\"safe\"|\"clean\"|\"block\",\"cleanText\":string?,\"reason\":string?}",
-    "When in doubt between safe/clean, prefer 'clean' and tidy. Only 'block' for clear violations.",
+    "",
+    "Decide one of three outcomes:",
+    "  • 'safe'  — fine as-is. Tidy, family-friendly, on-topic, no concerns.",
+    "  • 'clean' — INTENT is fine but text needs minor tidying (typos, slang spelling like 'lowk' / 'tbh', awkwardness). Return polished text under 200 chars.",
+    "  • 'block' — REJECT. Use this whenever ANY of the following apply:",
+    "      - sexual references of any kind, including jokes, euphemisms, body parts (penis, breasts, etc.), sex acts, hooking up, naked, kinks",
+    "      - profanity (fuck, shit, ass as profanity, bitch, damn as profanity, piss, hell as profanity) including censored or slang variants ('fk', 'sht', 'wtf', 'af')",
+    "      - slurs of any kind",
+    "      - drugs, alcohol consumption, smoking, vaping",
+    "      - violence, self-harm, threats, weapons (beyond age-appropriate context)",
+    "      - bathroom humor more graphic than 'poop'/'fart'",
+    "      - personal info about real people (full names + contact, addresses)",
+    "      - advertising, spam, links, phone numbers",
+    "      - hateful or mean-spirited content directed at people",
+    "      - clearly off-topic 'lol test' / 'asdfgh' / keyboard mash garbage",
+    "",
+    "Default behavior: when uncertain, choose 'block'. NEVER use 'safe' or 'clean' for sexual content, profanity, or slurs even when framed as a joke. The framings 'lol', 'lowk', 'jk', 'as a joke' are RED FLAGS, not softeners.",
+    "",
+    "Output strict JSON: {\"decision\":\"safe\"|\"clean\"|\"block\",\"cleanText\":string?,\"reason\":string?}",
+    "Always include a short `reason` when blocking.",
   ].join("\n");
 
-  const raw = await chat({
-    model: QOTD_MODEL_SAFEGUARD,
-    messages: [
-      { role: "system", content: system },
-      { role: "user", content: `Submission:\n"""\n${trimmed}\n"""` },
-    ],
-    responseFormat: "json_object",
-    temperature: 0.1,
-    maxTokens: 400,
-  });
+  let raw: string;
+  try {
+    raw = await chat({
+      model: QOTD_MODEL_SAFEGUARD,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: `Submission:\n"""\n${trimmed}\n"""` },
+      ],
+      responseFormat: "json_object",
+      temperature: 0,
+      maxTokens: 400,
+    });
+  } catch (e) {
+    // Fail CLOSED: if the safeguard API is unavailable, block rather
+    // than let questionable text through. Caller can surface "try a
+    // different wording" to the player.
+    return {
+      decision: "block",
+      reason: `safeguard unavailable: ${
+        e instanceof Error ? e.message : "unknown"
+      }`,
+    };
+  }
   const cleaned = raw.replace(/^```(?:json)?/g, "").replace(/```$/g, "").trim();
-  const parsed = JSON.parse(cleaned) as SafeguardVerdict;
+  let parsed: SafeguardVerdict;
+  try {
+    parsed = JSON.parse(cleaned) as SafeguardVerdict;
+  } catch {
+    return { decision: "block", reason: "safeguard parse error" };
+  }
   if (parsed.decision === "clean" && parsed.cleanText) {
     parsed.cleanText = parsed.cleanText.trim().slice(0, 200);
+    // Re-run the cleaned text through the hard blocklist — the model
+    // could rephrase to keep something graphic.
+    const cleanHit = hardBlockHit(parsed.cleanText);
+    if (cleanHit) {
+      return {
+        decision: "block",
+        reason: `cleaned text tripped blocklist (${cleanHit})`,
+      };
+    }
   }
   return parsed;
 }

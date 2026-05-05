@@ -5,6 +5,7 @@ import { CountdownCard } from "@/components/CountdownCard";
 import { AUTHOR_NAME, AUTHOR_AGE, PRIZE } from "@/lib/author";
 import { getActiveTournament, getLatestTournament, getCast } from "@/lib/engine";
 import { getCountdown } from "@/lib/countdown-settings";
+import { getTodayQuestion } from "@/lib/qotd";
 import { db, schema } from "@/db";
 import { and, eq } from "drizzle-orm";
 
@@ -42,6 +43,7 @@ export default async function Home() {
   const cast = latest ? await getCast(latest.id) : [];
   const playersIn = cast.filter((c) => !c.enrollment.eliminatedAt).length;
   const countdown = await getCountdown();
+  const todayQ = await getTodayQuestion();
 
   const subtitle = latest?.subtitle ?? "Quizzes! Friends! Adventure!";
 
@@ -144,6 +146,39 @@ export default async function Home() {
               🏅 Standings
             </Link>
           </div>
+
+          {/* Question of the Day card — fresh every morning. Pulls the row
+              for today's date; if the cron hasn't fired yet, hides itself. */}
+          {todayQ ? (
+            <Link
+              href="/qotd"
+              className="mt-5 card px-6 py-5 max-w-2xl w-full text-left flex flex-col gap-3 hover:-translate-y-0.5 transition-transform"
+              style={{ textDecoration: "none" }}
+            >
+              <div className="flex items-baseline justify-between gap-3">
+                <p className="font-display text-xs uppercase tracking-[0.2em] text-coral-deep">
+                  💡 Question of the Day
+                </p>
+                <span className="font-body text-xs text-navy-soft">
+                  Tap to answer →
+                </span>
+              </div>
+              <p className="font-display text-xl md:text-2xl text-navy leading-snug">
+                {todayQ.prompt}
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
+                {todayQ.options.map((o) => (
+                  <span
+                    key={o.value}
+                    className="card-sm bg-white px-3 py-2 font-display text-sm text-navy truncate"
+                  >
+                    <span className="text-coral-deep mr-2">{o.value}.</span>
+                    {o.label}
+                  </span>
+                ))}
+              </div>
+            </Link>
+          ) : null}
         </div>
       </div>
     </Stage>
