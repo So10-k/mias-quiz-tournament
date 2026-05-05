@@ -3,7 +3,7 @@
 // importable from server components (no client deps).
 
 import { db, schema } from "@/db";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, notInArray, sql } from "drizzle-orm";
 import { id as makeId } from "@/lib/ids";
 import {
   generateDailyQuestion,
@@ -172,11 +172,20 @@ export async function submitRecommendation(args: {
   return { ok: true, id };
 }
 
-export async function pickNextRecommendation() {
+export async function pickNextRecommendation(opts?: {
+  excludeIds?: string[];
+}) {
+  const where =
+    opts?.excludeIds && opts.excludeIds.length > 0
+      ? and(
+          eq(qotdRecommendations.status, "pending"),
+          notInArray(qotdRecommendations.id, opts.excludeIds)
+        )
+      : eq(qotdRecommendations.status, "pending");
   const [row] = await db
     .select()
     .from(qotdRecommendations)
-    .where(eq(qotdRecommendations.status, "pending"))
+    .where(where)
     .orderBy(qotdRecommendations.createdAt)
     .limit(1);
   return row ?? null;
@@ -395,6 +404,13 @@ export async function regenerateDailyQuestion(args: {
   const justThrewOut = existing?.prompt ?? null;
   const justThrewOutOptions = existing?.options ?? null;
 
+  // Capture the previous rec id (if any) so we can exclude it from the
+  // pick on the very next call AND push it to the back of the queue.
+  // Without these two, the regenerate just re-grabs the same rec (the
+  // oldest pending one) and Groq dutifully writes another question on
+  // the same topic — exactly the bug the host hit with the pizza one.
+  const previousRecId = existing?.basedOnRecommendationId ?? null;
+
   if (existing) {
     const [c] = await db
       .select({ n: sql<number>`count(*)::int` })
@@ -403,9 +419,17 @@ export async function regenerateDailyQuestion(args: {
     lostResponses = c?.n ?? 0;
 
     if (existing.basedOnRecommendationId) {
+      // Revert the rec back to 'pending' so the player's lifetime cap
+      // isn't burned on a thrown-out question — but bump createdAt to
+      // NOW so it's at the BACK of the queue, not the front. This way
+      // tomorrow's auto-cron won't keep grabbing the same rec.
       await db
         .update(qotdRecommendations)
-        .set({ status: "pending", pickedForQuestionId: null })
+        .set({
+          status: "pending",
+          pickedForQuestionId: null,
+          createdAt: new Date(),
+        })
         .where(eq(qotdRecommendations.id, existing.basedOnRecommendationId));
     }
 
@@ -429,6 +453,10 @@ export async function regenerateDailyQuestion(args: {
     forDate,
     currentEventsContext: args.currentEventsContext,
     extraAvoidPrompts: extraAvoid,
+    // Skip THIS specific rec on the immediate pick. The createdAt bump
+    // above keeps it from popping back to the top tomorrow either —
+    // newer recs get priority going forward.
+    excludeRecIds: previousRecId ? [previousRecId] : undefined,
   });
   if (!result.created) {
     return result;
@@ -449,6 +477,10 @@ export async function generateAndStoreDailyQuestion(args: {
   // question doesn't get re-generated verbatim — the recent-prompts
   // query no longer sees the deleted row, so we have to hand-feed it.
   extraAvoidPrompts?: string[];
+  // When set, recommendations with these ids are skipped by the queue
+  // pick. Used by regenerate so the host doesn't get the same rec
+  // (and thus the same topic) on the very next generate.
+  excludeRecIds?: string[];
 }): Promise<
   | { created: true; questionId: string }
   | { created: false; reason: string }
@@ -460,7 +492,9 @@ export async function generateAndStoreDailyQuestion(args: {
     return { created: false, reason: `already exists for ${forDate}` };
   }
 
-  const rec = await pickNextRecommendation();
+  const rec = await pickNextRecommendation({
+    excludeIds: args.excludeRecIds,
+  });
   const recent = await getRecentQuestions(28);
   const recentPrompts = recent.map((r) => r.prompt);
   const avoidList = [...(args.extraAvoidPrompts ?? []), ...recentPrompts];
