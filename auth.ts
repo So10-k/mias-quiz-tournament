@@ -97,6 +97,48 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       : []),
   ],
   callbacks: {
+    // Gate first-time sign-ins behind the tournament's registration toggle.
+    // Without this, Auth0's passwordless flow auto-creates a `users` row
+    // for any verified email — bypassing the "registration closed" rule
+    // that the legacy /signin/actions form enforces by bouncing unknown
+    // emails to /join. Existing users (any row in `users` with that email)
+    // sail through; brand-new emails get rejected when registration is off.
+    //
+    // Returning `false` from signIn aborts the flow; Auth.js redirects to
+    // /signin?error=AccessDenied which the page surfaces as a friendly
+    // "registration is closed" message.
+    async signIn({ user, account }) {
+      // Only gate OAuth/OIDC providers (Auth0). The email/magic-link
+      // provider's own action layer already enforces this rule.
+      if (account?.type !== "oauth" && account?.type !== "oidc") return true;
+      const email = user.email?.toLowerCase().trim();
+      if (!email) return false;
+
+      const { db } = await import("@/db");
+      const { users: usersTable, tournaments } = await import("@/db/schema");
+      const { eq, desc } = await import("drizzle-orm");
+
+      const [existing] = await db
+        .select({ id: usersTable.id })
+        .from(usersTable)
+        .where(eq(usersTable.email, email))
+        .limit(1);
+      if (existing) return true;
+
+      // No existing user — would create. Check the latest tournament's
+      // registration state. We use the most recently created tournament
+      // because there's typically only one active at a time.
+      const [latest] = await db
+        .select({
+          registrationOpen: tournaments.registrationOpen,
+        })
+        .from(tournaments)
+        .orderBy(desc(tournaments.createdAt))
+        .limit(1);
+      // No tournament yet → allow (this is the first user setting things up).
+      if (!latest) return true;
+      return latest.registrationOpen === true;
+    },
     async session({ session, user }) {
       if (session.user) {
         (session.user as any).id = user.id;

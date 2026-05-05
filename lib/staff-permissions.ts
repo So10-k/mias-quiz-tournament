@@ -45,7 +45,11 @@ export type Permission =
   | "staff:read"
   | "staff:write"
   // audit log
-  | "audit:read";
+  | "audit:read"
+  // forms (custom forms feature) — read covers viewing forms + responses,
+  // write covers creating/editing/publishing/deleting
+  | "forms:read"
+  | "forms:write";
 
 const VIEWER: ReadonlySet<Permission> = new Set<Permission>([
   "bracket:read",
@@ -56,6 +60,7 @@ const VIEWER: ReadonlySet<Permission> = new Set<Permission>([
   "visitors:read",
   "attempts:read",
   "files:read",
+  "forms:read",
 ]);
 
 const EDITOR: ReadonlySet<Permission> = new Set<Permission>([
@@ -65,6 +70,7 @@ const EDITOR: ReadonlySet<Permission> = new Set<Permission>([
   "predictions:write",
   "emails:write",
   "files:write",
+  "forms:write",
 ]);
 
 const ADMIN: ReadonlySet<Permission> = new Set<Permission>([

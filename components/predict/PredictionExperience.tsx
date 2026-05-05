@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState, useTransition, useRef } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { submitPredictionAction } from "@/app/predict/actions";
-import { bracketByeSet } from "@/lib/predictions";
+// Pure helpers — must NOT come from "@/lib/predictions" because that pulls
+// db/index.ts into the client bundle and throws on missing DATABASE_URL.
+import { bracketByeSet } from "@/lib/predict-cascade";
 
 // ─── types ────────────────────────────────────────────────────────────
 type BracketKind = "main" | "losers";

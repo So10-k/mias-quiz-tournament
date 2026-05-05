@@ -164,8 +164,37 @@ export default async function PlayHome() {
           </div>
         )}
 
-        {/* Practice rounds — don't count, available to everyone */}
-        {practiceRounds.length > 0 ? (
+        {/* Spectator mode banner — explicit cue for eliminated players that
+            the chapter quizzes (and pure practice rounds) are off-limits.
+            Tiebreaker / make-up rounds aren't shown here anyway since the
+            practiceRounds filter excludes anything with tiebreakerMatchupId. */}
+        {eliminated ? (
+          <div className="card px-6 py-6 w-full text-center bg-sky1">
+            <div className="text-5xl">👀</div>
+            <h3 className="font-display text-2xl text-navy mt-3">
+              You&rsquo;re in spectator mode
+            </h3>
+            <p className="font-body text-base text-navy-soft mt-2 max-w-md mx-auto">
+              You&rsquo;re out of both brackets, so the chapter quizzes and
+              practice rounds are locked. The bracket, standings, and
+              predictions still work — settle in and watch the rest unfold.
+            </p>
+            <div className="mt-5 flex items-center justify-center gap-3 flex-wrap">
+              <Link href="/bracket" className="pop pop-coral">
+                🏆 Bracket
+              </Link>
+              <Link href="/standings" className="pop pop-yellow">
+                📊 Standings
+              </Link>
+              <Link href="/predict" className="pop pop-sky">
+                🔮 Predict
+              </Link>
+            </div>
+          </div>
+        ) : null}
+
+        {/* Practice rounds — don't count, hidden when you're a spectator. */}
+        {!eliminated && practiceRounds.length > 0 ? (
           <div className="card-sm px-5 py-5 w-full bg-sky1">
             <div className="flex items-baseline justify-between gap-3 mb-3">
               <h3 className="font-display text-xl text-navy">

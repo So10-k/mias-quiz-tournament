@@ -9,6 +9,9 @@ import { and, eq } from "drizzle-orm";
 import {
   getRoundWithQuestions,
   getAttemptWithAnswers,
+  getEnrollment,
+  getActiveTournament,
+  getLatestTournament,
 } from "@/lib/engine";
 
 export const dynamic = "force-dynamic";
@@ -46,6 +49,44 @@ export default async function PracticeRoundPage({
       !!m &&
       (m.playerAUserId === user.id || m.playerBUserId === user.id);
     if (!allowed) notFound();
+  }
+
+  // Pure practice (no tiebreaker link) is gated by elimination status —
+  // out of the bracket = spectator, no quizzes (including the warm-ups).
+  // Tiebreaker / make-up rounds are exempt: the whole point is letting
+  // eliminated players play their way back in.
+  if (!round.tiebreakerMatchupId && user.role !== "author") {
+    const tournament =
+      (await getActiveTournament()) ?? (await getLatestTournament());
+    if (tournament) {
+      const enrollment = await getEnrollment(user.id, tournament.id);
+      if (enrollment?.eliminatedAt) {
+        return (
+          <Stage>
+            <div className="h-[calc(100vh-128px)] flex items-center justify-center px-4">
+              <div className="card px-7 py-7 text-center max-w-md">
+                <div className="text-6xl">👀</div>
+                <h1 className="font-display text-3xl text-navy mt-3">
+                  You&rsquo;re in spectator mode.
+                </h1>
+                <p className="font-body text-base text-navy-soft mt-3">
+                  Practice rounds are for active players. You&rsquo;re still
+                  welcome to watch the bracket and cheer the others on.
+                </p>
+                <div className="mt-7 flex items-center justify-center gap-3">
+                  <Link href="/bracket" className="pop pop-coral">
+                    🏆 Bracket
+                  </Link>
+                  <Link href="/play" className="pop pop-white">
+                    ← Back
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </Stage>
+        );
+      }
+    }
   }
 
   const data = await getRoundWithQuestions(round.id);

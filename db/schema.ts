@@ -9,6 +9,7 @@ import {
   primaryKey,
   pgEnum,
   jsonb,
+  index,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
@@ -466,6 +467,123 @@ export const staffActions = pgTable("staff_actions", {
   details: jsonb("details"),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
 });
+
+// ─── forms ────────────────────────────────────────────────────────────
+// Native forms feature. Authored from /staff/forms, served at /forms/[slug]
+// with a typeform-style one-question-per-page runner. Forms can require
+// authentication (link submissions to a `users.id`), or accept anonymous
+// responses for public collection.
+
+export const forms = pgTable("forms", {
+  id: text("id").primaryKey(),
+  // URL-safe slug. Public form lives at /forms/<slug>.
+  slug: text("slug").notNull().unique(),
+  title: text("title").notNull(),
+  // Optional intro shown before the first question (typeform-style cover).
+  intro: text("intro"),
+  // Optional thank-you body shown after submit.
+  outro: text("outro"),
+  // 'draft' = invisible publicly; 'published' = live; 'closed' = no new
+  // submissions but the URL still resolves.
+  status: text("status").notNull().default("draft"),
+  // Authentication gate. When true, /forms/<slug> redirects to /signin
+  // for unauthenticated visitors and stamps users.id on each submission.
+  requireAuth: boolean("require_auth").notNull().default(false),
+  // When true (and requireAuth is true), only one submission per user.
+  oneSubmissionPerUser: boolean("one_submission_per_user")
+    .notNull()
+    .default(false),
+  // Tracks who created it for audit. Nullable so cascading staff deletion
+  // doesn't drop forms.
+  createdByStaffId: text("created_by_staff_id").references(
+    () => staffUsers.id,
+    { onDelete: "set null" }
+  ),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+export const formQuestionType = pgEnum("form_question_type", [
+  "short_text",
+  "long_text",
+  "email",
+  "single_select",
+  "multi_select",
+  "yes_no",
+  "scale",
+  "statement",
+]);
+
+export const formQuestions = pgTable(
+  "form_questions",
+  {
+    id: text("id").primaryKey(),
+    formId: text("form_id")
+      .notNull()
+      .references(() => forms.id, { onDelete: "cascade" }),
+    order: integer("order").notNull(),
+    type: formQuestionType("type").notNull(),
+    prompt: text("prompt").notNull(),
+    helperText: text("helper_text"),
+    required: boolean("required").notNull().default(true),
+    // Choices for single_select / multi_select. Format: [{label, value}].
+    // Scale uses a numeric range encoded here too: [{label:"1",value:"1"},...].
+    options: jsonb("options").$type<Array<{ label: string; value: string }>>(),
+    // For scale: { min: 1, max: 5, minLabel, maxLabel } (typed loose).
+    config: jsonb("config"),
+  },
+  (t) => ({
+    formOrder: index("form_questions_form_order_idx").on(t.formId, t.order),
+  })
+);
+
+export const formSubmissions = pgTable(
+  "form_submissions",
+  {
+    id: text("id").primaryKey(),
+    formId: text("form_id")
+      .notNull()
+      .references(() => forms.id, { onDelete: "cascade" }),
+    // Player who submitted, when authed. Null = anonymous response.
+    userId: text("user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    submittedAt: timestamp("submitted_at", { mode: "date" })
+      .notNull()
+      .defaultNow(),
+    ip: text("ip"),
+    userAgent: text("user_agent"),
+    // Per-question answers stored inline for cheap reads. The flatter
+    // join table (form_answers) is the source of truth; this is just a
+    // denormalised cache so /staff/forms/[id]/responses doesn't N+1.
+    answersJson: jsonb("answers_json").$type<
+      Record<string, string | string[] | number | boolean | null>
+    >(),
+  },
+  (t) => ({
+    formIdx: index("form_submissions_form_idx").on(t.formId),
+    userIdx: index("form_submissions_user_idx").on(t.userId),
+  })
+);
+
+export const formAnswers = pgTable(
+  "form_answers",
+  {
+    id: text("id").primaryKey(),
+    submissionId: text("submission_id")
+      .notNull()
+      .references(() => formSubmissions.id, { onDelete: "cascade" }),
+    questionId: text("question_id")
+      .notNull()
+      .references(() => formQuestions.id, { onDelete: "cascade" }),
+    // Stored as JSON so any answer shape works (string, array, number).
+    value: jsonb("value"),
+  },
+  (t) => ({
+    submissionIdx: index("form_answers_submission_idx").on(t.submissionId),
+    questionIdx: index("form_answers_question_idx").on(t.questionId),
+  })
+);
 
 // ─── prediction game ───────────────────────────────────────────────────
 // March-madness style: signed-in users predict winners of undecided
