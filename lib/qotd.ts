@@ -369,6 +369,60 @@ export async function rereviewAll(): Promise<{
 
 // ─── orchestration — daily generation ────────────────────────────────
 
+// Regenerate today's question even if one already exists. Destructive:
+// deletes the existing row (FK cascade wipes responses + answers) and
+// reverts the seeding recommendation back to 'pending'. Use when the
+// host doesn't like the question the cron picked.
+export async function regenerateDailyQuestion(args: {
+  forDate?: string;
+  currentEventsContext?: string | null;
+}): Promise<
+  | {
+      created: true;
+      questionId: string;
+      replaced: boolean;
+      lostResponses: number;
+    }
+  | { created: false; reason: string }
+> {
+  const forDate = args.forDate ?? todayKey();
+  const existing = await getQuestionForDate(forDate);
+  let lostResponses = 0;
+
+  if (existing) {
+    const [c] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(qotdResponses)
+      .where(eq(qotdResponses.questionId, existing.id));
+    lostResponses = c?.n ?? 0;
+
+    // Revert the seeding rec so the queue isn't permanently consumed
+    // by a thrown-out question.
+    if (existing.basedOnRecommendationId) {
+      await db
+        .update(qotdRecommendations)
+        .set({ status: "pending", pickedForQuestionId: null })
+        .where(eq(qotdRecommendations.id, existing.basedOnRecommendationId));
+    }
+
+    await db.delete(qotdQuestions).where(eq(qotdQuestions.id, existing.id));
+  }
+
+  const result = await generateAndStoreDailyQuestion({
+    forDate,
+    currentEventsContext: args.currentEventsContext,
+  });
+  if (!result.created) {
+    return result;
+  }
+  return {
+    created: true,
+    questionId: result.questionId,
+    replaced: !!existing,
+    lostResponses,
+  };
+}
+
 export async function generateAndStoreDailyQuestion(args: {
   forDate?: string;
   currentEventsContext?: string | null;

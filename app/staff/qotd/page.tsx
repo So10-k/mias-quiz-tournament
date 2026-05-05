@@ -8,6 +8,7 @@ import { desc, eq } from "drizzle-orm";
 import {
   getTodayQuestion,
   generateAndStoreDailyQuestion,
+  regenerateDailyQuestion,
   rejectRecommendation,
   listAllResponsesForStaff,
   rereviewAll,
@@ -67,6 +68,59 @@ async function rejectRecAction(formData: FormData) {
     details: { reason },
   });
   revalidatePath("/staff/qotd");
+}
+
+async function regenerateAction(formData: FormData) {
+  "use server";
+  const me = await requireStaff({
+    next: "/staff/qotd",
+    permission: "forms:write",
+  });
+  // Soft confirm: button submits with confirm=yes. Without it (e.g. a
+  // hand-rolled POST), do nothing and bounce. We surface a confirm
+  // overlay UI-side via the second-click pattern.
+  if (formData.get("confirm") !== "yes") {
+    redirect("/staff/qotd?error=confirm");
+  }
+  const ctx = await fetchCurrentEventsContext();
+  try {
+    const result = await regenerateDailyQuestion({
+      currentEventsContext: ctx,
+    });
+    await logStaffAction({
+      actor: { id: me.id, email: me.email },
+      action: "qotd.regenerate",
+      details: result,
+    });
+    if (!result.created) {
+      redirect(
+        `/staff/qotd?error=${encodeURIComponent(result.reason ?? "regen failed")}`
+      );
+    }
+    revalidatePath("/staff/qotd");
+    revalidatePath("/qotd");
+    revalidatePath("/");
+    redirect(
+      `/staff/qotd?ok=${encodeURIComponent(
+        result.replaced
+          ? `replaced — wiped ${result.lostResponses} response${result.lostResponses === 1 ? "" : "s"}`
+          : "new question generated"
+      )}`
+    );
+  } catch (e) {
+    if ((e as { digest?: string })?.digest?.startsWith?.("NEXT_REDIRECT"))
+      throw e;
+    await logStaffAction({
+      actor: { id: me.id, email: me.email },
+      action: "qotd.regenerate_failed",
+      details: { error: e instanceof Error ? e.message : String(e) },
+    });
+    redirect(
+      `/staff/qotd?error=${encodeURIComponent(
+        e instanceof Error ? e.message : "regen failed"
+      )}`
+    );
+  }
 }
 
 async function rereviewAction() {
@@ -201,9 +255,38 @@ export default async function StaffQotdPage({
           <div className="flex flex-wrap gap-2">
             <form action={generateNowAction}>
               <button className="pop pop-coral text-sm">
-                {today ? "🔄 Re-generate (skips if exists)" : "⚡ Generate now"}
+                {today ? "🔄 Generate (skip if exists)" : "⚡ Generate now"}
               </button>
             </form>
+            {today ? (
+              <details className="inline-block">
+                <summary className="cursor-pointer pop pop-coral text-sm list-none">
+                  🗑️ Don&rsquo;t like it — regenerate
+                </summary>
+                <form
+                  action={regenerateAction}
+                  className="mt-2 card-sm bg-white px-3 py-3 flex flex-col gap-2"
+                >
+                  <input type="hidden" name="confirm" value="yes" />
+                  <p className="font-body text-xs text-navy">
+                    This <strong>deletes</strong> today&rsquo;s question and
+                    asks Groq for a new one. Any responses already submitted
+                    will be wiped (
+                    <strong>
+                      {responses.length} so far
+                    </strong>
+                    ). The current question&rsquo;s recommendation goes back
+                    to the pending queue.
+                  </p>
+                  <button
+                    className="pop pop-coral text-xs self-start"
+                    type="submit"
+                  >
+                    Yes, throw it out and regenerate
+                  </button>
+                </form>
+              </details>
+            ) : null}
             <form action={rereviewAction}>
               <button
                 className="pop pop-yellow text-sm"
@@ -214,10 +297,11 @@ export default async function StaffQotdPage({
             </form>
           </div>
           <p className="font-body text-xs text-navy-soft">
-            Auto-runs daily at 11:00 UTC (~6–7am ET) via Vercel Cron. Manual
-            generate is idempotent — won&rsquo;t overwrite. Re-review fires
-            the safeguard prompt against everything already in the DB; use
-            it after tightening the safeguard rules to catch stragglers.
+            Auto-runs daily at 11:00 UTC (~6–7am ET) via Vercel Cron.
+            Generate is idempotent — won&rsquo;t overwrite. Regenerate is
+            destructive — wipes responses + reverts the recommendation.
+            Re-review fires the safeguard prompt against everything already
+            in the DB; use it after tightening rules to catch stragglers.
           </p>
         </section>
 
