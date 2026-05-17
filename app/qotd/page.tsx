@@ -1,7 +1,23 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Stage } from "@/components/Stage";
+import { AnswerCapsule } from "@/components/AnswerCapsule";
 import { currentUser } from "@/lib/session";
+import {
+  ld,
+  quizLD,
+  faqLD,
+  breadcrumbLD,
+  SITE_URL,
+} from "@/lib/seo";
+
+export const metadata: Metadata = {
+  title: "Question of the Day",
+  description:
+    "A fresh AI-generated multiple-choice question every morning, written for ages 5–95. Answer A, B, C, D, or write your own.",
+  alternates: { canonical: `${SITE_URL}/qotd` },
+};
 import {
   getTodayQuestion,
   listResponses,
@@ -63,7 +79,64 @@ export default async function QotdPage({
 
   return (
     <Stage scrollable>
+      {/* JSON-LD: Quiz schema for today's question + an FAQPage entry
+          so AI crawlers can extract the day's prompt as a stand-alone
+          Q&A. The Quiz schema includes age range, language, and the
+          four answer options. */}
+      {question ? (
+        <>
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={ld(
+              quizLD({
+                forDate: todayKey(),
+                prompt: question.prompt,
+                options: question.options,
+                context: null,
+              })
+            )}
+          />
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={ld(
+              faqLD([
+                {
+                  question: "What is the Question of the Day?",
+                  answer:
+                    "Question of the Day is a daily multiple-choice prompt on Mia's Quiz Tournament, generated each morning by an AI model from player-submitted topic suggestions and reviewed by a safety filter before publishing. Anyone can answer A/B/C/D or write their own response.",
+                },
+                {
+                  question: `Today's question (${todayKey()})`,
+                  answer:
+                    question.prompt +
+                    " Options: " +
+                    question.options
+                      .map((o) => `${o.value}. ${o.label}`)
+                      .join("; ") +
+                    ".",
+                },
+              ])
+            )}
+          />
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={ld(
+              breadcrumbLD([
+                { name: "Home", url: SITE_URL },
+                { name: "Question of the Day", url: `${SITE_URL}/qotd` },
+              ])
+            )}
+          />
+        </>
+      ) : null}
       <div className="max-w-2xl mx-auto pt-4 px-4 flex flex-col gap-5 pb-12">
+        {/* Answer Capsule — what the QOTD is, in 40-60 words. Doubles
+            as the page's lead paragraph for crawlers. */}
+        <AnswerCapsule
+          topic="qotd"
+          question="What is the Question of the Day?"
+          answer="Question of the Day is a fresh daily multiple-choice trivia prompt on Mia's Quiz Tournament. A new question goes up every morning, generated from player suggestions and filtered for family-friendly content. Players answer A, B, C, D — or pick 'Other' and write their own response, which the AI tidies up before posting."
+        />
         <div className="card-sm px-5 py-3 flex items-baseline justify-between gap-3 flex-wrap">
           <div>
             <h1 className="font-display text-3xl text-navy">

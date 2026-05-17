@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { submitChapter } from "@/app/play/round/[n]/actions";
 import { submitPractice } from "@/app/play/practice/[id]/actions";
+import { TTSButton } from "@/components/TTSButton";
 
 type Option = { id: string; label: string; isCorrect: boolean };
 type Question = { id: string; prompt: string; options: Option[] };
@@ -372,9 +373,28 @@ export function ChapterRunner({
                 </span>
               )}
             </div>
-            <h2 className="font-display text-3xl md:text-4xl text-navy mt-2">
-              {questions[page].prompt}
-            </h2>
+            <div className="mt-2 flex items-start justify-between gap-3">
+              <h2 className="font-display text-3xl md:text-4xl text-navy flex-1">
+                {questions[page].prompt}
+              </h2>
+              {/* Read-aloud — pulls audio from /api/tts (Groq Orpheus).
+                  Compact icon-only so it doesn't crowd the question. */}
+              <TTSButton
+                key={questions[page].id}
+                text={(() => {
+                  const q = questions[page];
+                  const opts = q.options
+                    .map(
+                      (o, i) =>
+                        `${String.fromCharCode(65 + i)}. ${o.label}`
+                    )
+                    .join(". ");
+                  return `${q.prompt}. ${opts}`;
+                })()}
+                compact
+                className="pop pop-sky text-sm px-3 py-1.5 shrink-0"
+              />
+            </div>
 
             <div className="mt-7 grid grid-cols-1 md:grid-cols-2 gap-3">
               {questions[page].options.map((o, oi) => {

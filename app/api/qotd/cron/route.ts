@@ -14,10 +14,12 @@ export const dynamic = "force-dynamic";
 async function authorize(req: NextRequest): Promise<boolean> {
   const expected = process.env.CRON_SECRET;
   if (!expected) {
-    // No CRON_SECRET set — allow any request. Useful for first-time setup
-    // before the secret is added to Vercel envs. Still rate-limited by
-    // idempotency: the function just no-ops if today's question exists.
-    return true;
+    // Fail CLOSED in production. Without this, an unset CRON_SECRET
+    // leaves the daily generator open to the internet — an attacker
+    // can spam it to burn Groq credits (idempotency stops re-creates
+    // for today, but a single hit is still a free Groq call). Local
+    // dev gets an explicit escape hatch via NODE_ENV.
+    return process.env.NODE_ENV === "development";
   }
   const auth = req.headers.get("authorization");
   if (auth === `Bearer ${expected}`) return true;

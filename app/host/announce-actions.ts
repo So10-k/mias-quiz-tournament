@@ -26,6 +26,7 @@ import {
   type AudienceMode,
   type AudienceUniverse,
 } from "@/lib/audience";
+import { logHostAction } from "@/lib/discourse-staff-log";
 
 async function requireHost() {
   const u = await requireUser();
@@ -348,7 +349,7 @@ function plainToHtml(body: string): string {
 export async function sendAnnouncement(
   formData: FormData
 ): Promise<AnnouncementResult> {
-  await requireHost();
+  const me = await requireHost();
 
   const parsed = Input.safeParse({
     subject: String(formData.get("subject") ?? "").trim(),
@@ -465,6 +466,22 @@ export async function sendAnnouncement(
   // Hand off to the active provider (Resend or Brevo, picked from
   // app_settings via /host).
   const result = await sendBatch(messages);
+
+  void logHostAction({
+    actor: me,
+    actionLabel: "send_announcement",
+    subject: resolvedSubject.slice(0, 80),
+    details: [
+      `Audience: ${audience}`,
+      `Recipients: ${recipients.length}`,
+      `Sent: ${result.sent} · Failed: ${recipients.length - result.sent}`,
+      templateId ? `Template: ${templateId}` : "Plain body",
+      result.dryRun ? "DRY RUN" : null,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    newValue: resolvedSubject,
+  });
 
   revalidatePath("/host");
   return {

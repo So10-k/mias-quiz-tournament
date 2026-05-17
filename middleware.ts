@@ -126,25 +126,32 @@ export async function middleware(request: NextRequest) {
   }
 
   // ── IP blocklist ────────────────────────────────────────────────────────
-  const ip = getRealIpFromHeaders(request.headers);
-  if (ip && (await isIpBlocked(ip))) {
-    const mode = await getBlockMode();
-    if (mode === "bare") {
-      // Native browser "this page isn't working / HTTP ERROR 403" treatment.
-      return new NextResponse(null, {
+  // Wrapped in try/catch so a transient DB failure here can never
+  // 500 every page on the site. The block-list is a soft gate, not
+  // a critical security boundary; if it can't be read we fail OPEN
+  // (let traffic through) and surface the error in Vercel logs.
+  try {
+    const ip = getRealIpFromHeaders(request.headers);
+    if (ip && (await isIpBlocked(ip))) {
+      const mode = await getBlockMode();
+      if (mode === "bare") {
+        return new NextResponse(null, {
+          status: 403,
+          statusText: "Forbidden",
+          headers: { "cache-control": "no-store" },
+        });
+      }
+      const u = request.nextUrl.clone();
+      u.pathname = "/blocked";
+      u.search = "";
+      return NextResponse.rewrite(u, {
         status: 403,
-        statusText: "Forbidden",
         headers: { "cache-control": "no-store" },
       });
     }
-    // Default: friendly styled page with the reason.
-    const u = request.nextUrl.clone();
-    u.pathname = "/blocked";
-    u.search = "";
-    return NextResponse.rewrite(u, {
-      status: 403,
-      headers: { "cache-control": "no-store" },
-    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("middleware: block check failed (failing open):", err);
   }
 
   return NextResponse.next();

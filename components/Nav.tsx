@@ -7,8 +7,13 @@ import { getStaffUser } from "@/lib/staff-auth";
 import { staffCan } from "@/lib/staff-permissions";
 import { signOutEverywhereAction } from "@/app/actions/signout";
 import { MobileNavMenu } from "./MobileNavMenu";
+import { NavDropdown } from "./NavDropdown";
 
 const linkBase = "pop pop-white text-base px-3 py-2 rounded-xl";
+// Dropdown row — a Link rendered inside a card-sm panel. Less visual
+// weight than a top-level chiclet so the dropdown reads like a menu.
+const dropdownLink =
+  "font-body text-sm text-navy px-3 py-2 rounded-lg hover:bg-sky1";
 // Mobile-drawer rows are styled to be tap-friendly: full-width, larger,
 // no need to fit a horizontal row.
 const drawerLink =
@@ -35,11 +40,18 @@ async function PlayerNav() {
   // inline row AND the mobile drawer (passed to MobileNavMenu as children).
   // For each surface we apply slightly different classes so the drawer
   // rows feel like full-width buttons rather than chiclets.
+  // Top-level inline links: only the most-used actions stay on the
+  // bar. Everything else slots into a "More" dropdown so the row
+  // never wraps onto two lines.
   const inlineLinks = (
     <>
-      <Link href="/" className={linkBase}>Home</Link>
       {user ? (
-        <Link href="/play" className={linkBase}>Play</Link>
+        <Link
+          href="/play"
+          className="pop pop-grass text-base px-3 py-2 rounded-xl"
+        >
+          ▶ Play
+        </Link>
       ) : (
         <Link
           href="/signin"
@@ -48,9 +60,6 @@ async function PlayerNav() {
           Sign In
         </Link>
       )}
-      <Link href="/bracket" className={linkBase}>Bracket</Link>
-      <Link href="/players" className={linkBase}>Players</Link>
-      <Link href="/standings" className={linkBase}>Standings</Link>
       {showPredictLink ? (
         <Link
           href="/predict"
@@ -59,20 +68,45 @@ async function PlayerNav() {
           🔮 Predict
         </Link>
       ) : null}
-      {user ? (
-        <Link
-          href="/miamail"
-          className="pop pop-sky text-base px-3 py-2 rounded-xl"
-        >
-          📬 Miamail
-        </Link>
-      ) : null}
       <Link
         href="/qotd"
         className="pop pop-yellow text-base px-3 py-2 rounded-xl"
       >
         💡 QOTD
       </Link>
+      <NavDropdown label="More">
+        <Link href="/bracket" className={dropdownLink}>
+          🏆 Bracket
+        </Link>
+        <Link href="/players" className={dropdownLink}>
+          👥 Players
+        </Link>
+        <Link href="/standings" className={dropdownLink}>
+          📊 Standings
+        </Link>
+        <Link href="/blog" className={dropdownLink}>
+          📝 Blog
+        </Link>
+        <a
+          href="https://discuss.miaswebsites.art"
+          target="_blank"
+          rel="noopener noreferrer"
+          className={dropdownLink}
+        >
+          💬 Discuss
+        </a>
+        <Link href="/listen" className={dropdownLink}>
+          🎵 Theme song
+        </Link>
+        {user ? (
+          <Link href="/miamail" className={dropdownLink}>
+            📬 Miamail
+          </Link>
+        ) : null}
+        <Link href="/status" className={dropdownLink}>
+          🟢 Status
+        </Link>
+      </NavDropdown>
       {isHost ? (
         <Link
           href="/host"
@@ -111,6 +145,8 @@ async function PlayerNav() {
       <Link href="/bracket" className={drawerLink}>🏆 Bracket</Link>
       <Link href="/players" className={drawerLink}>👥 Players</Link>
       <Link href="/standings" className={drawerLink}>📊 Standings</Link>
+      <Link href="/blog" className={drawerLink}>📝 Blog</Link>
+      <Link href="/listen" className={drawerLink}>🎵 Listen</Link>
       {showPredictLink ? (
         <Link
           href="/predict"
@@ -161,7 +197,7 @@ async function PlayerNav() {
         <MobileNavMenu>{drawerLinks}</MobileNavMenu>
         <Link
           href="/"
-          className="flex-1 flex items-center justify-center gap-2 font-display text-lg text-navy hover:text-coral transition-colors"
+          className="flex-1 flex items-center justify-center gap-2 font-display text-lg text-navy hover:text-coral-deep transition-colors"
         >
           <span className="text-2xl">🌞</span>
           <span>{AUTHOR_NAME}&rsquo;s Quiz</span>
@@ -175,7 +211,7 @@ async function PlayerNav() {
       <nav className="card-sm hidden md:flex items-center justify-between gap-2 px-5 py-3">
         <Link
           href="/"
-          className="font-display text-xl text-navy hover:text-coral transition-colors flex items-center gap-2"
+          className="font-display text-xl text-navy hover:text-coral-deep transition-colors flex items-center gap-2"
         >
           <span className="text-2xl">🌞</span>
           <span>{AUTHOR_NAME}&rsquo;s Quiz</span>
@@ -199,12 +235,18 @@ async function StaffNav() {
   const canViewEmails = staffCan(role, "emails:read");
   const canViewAttempts = staffCan(role, "attempts:read");
   const canViewForms = staffCan(role, "forms:read");
+  const canViewArticles = staffCan(role, "articles:read");
   const canManageStaff = staffCan(role, "staff:read");
   const canViewAudit = staffCan(role, "audit:read");
 
+  // Staff nav: the most actionable cluster (Overview, Control,
+  // Manage staff) stays inline. Everything role-gated lands in the
+  // "More" dropdown so the bar never wraps.
   const inlineLinks = me ? (
     <>
-      <Link href="/staff" className={linkBase}>Overview</Link>
+      <Link href="/staff" className={linkBase}>
+        Overview
+      </Link>
       {canControl ? (
         <Link
           href="/staff/control"
@@ -213,36 +255,63 @@ async function StaffNav() {
           🛠️ Control
         </Link>
       ) : null}
-      {canViewBracket ? (
-        <Link href="/staff/bracket" className={linkBase}>Bracket</Link>
-      ) : null}
-      {canViewPlayers ? (
-        <Link href="/staff/players" className={linkBase}>Players</Link>
-      ) : null}
-      {canViewStandings ? (
-        <Link href="/staff/standings" className={linkBase}>Standings</Link>
-      ) : null}
-      {canViewPredictions ? (
-        <Link href="/staff/predictions" className={linkBase}>Predictions</Link>
-      ) : null}
-      {canViewAttempts ? (
-        <Link href="/staff/attempts" className={linkBase}>Attempts</Link>
-      ) : null}
-      {canViewEmails ? (
-        <Link href="/staff/emails" className={linkBase}>Emails</Link>
-      ) : null}
-      {canViewForms ? (
-        <Link href="/staff/forms" className={linkBase}>Forms</Link>
-      ) : null}
-      {canViewForms ? (
-        <Link href="/staff/qotd" className={linkBase}>QOTD</Link>
-      ) : null}
-      {canViewVisitors ? (
-        <Link href="/staff/visitors" className={linkBase}>Visitors</Link>
-      ) : null}
-      {canViewAudit ? (
-        <Link href="/staff/audit" className={linkBase}>Audit</Link>
-      ) : null}
+      <NavDropdown label="More">
+        {canViewBracket ? (
+          <Link href="/staff/bracket" className={dropdownLink}>
+            🏆 Bracket
+          </Link>
+        ) : null}
+        {canViewPlayers ? (
+          <Link href="/staff/players" className={dropdownLink}>
+            👥 Players
+          </Link>
+        ) : null}
+        {canViewStandings ? (
+          <Link href="/staff/standings" className={dropdownLink}>
+            📊 Standings
+          </Link>
+        ) : null}
+        {canViewPredictions ? (
+          <Link href="/staff/predictions" className={dropdownLink}>
+            🔮 Predictions
+          </Link>
+        ) : null}
+        {canViewAttempts ? (
+          <Link href="/staff/attempts" className={dropdownLink}>
+            📝 Attempts
+          </Link>
+        ) : null}
+        {canViewEmails ? (
+          <Link href="/staff/emails" className={dropdownLink}>
+            📨 Emails
+          </Link>
+        ) : null}
+        {canViewForms ? (
+          <Link href="/staff/forms" className={dropdownLink}>
+            📋 Forms
+          </Link>
+        ) : null}
+        {canViewArticles ? (
+          <Link href="/staff/articles" className={dropdownLink}>
+            📰 Articles
+          </Link>
+        ) : null}
+        {canViewForms ? (
+          <Link href="/staff/qotd" className={dropdownLink}>
+            💡 QOTD
+          </Link>
+        ) : null}
+        {canViewVisitors ? (
+          <Link href="/staff/visitors" className={dropdownLink}>
+            👀 Visitors
+          </Link>
+        ) : null}
+        {canViewAudit ? (
+          <Link href="/staff/audit" className={dropdownLink}>
+            📜 Audit
+          </Link>
+        ) : null}
+      </NavDropdown>
       {canManageStaff ? (
         <Link
           href="/staff/staff"
@@ -251,9 +320,6 @@ async function StaffNav() {
           👥 Staff
         </Link>
       ) : null}
-      <span className="font-display text-xs text-navy-soft hidden md:inline px-2">
-        {me.email}
-      </span>
       <form action="/staff/signout" method="POST">
         <button
           type="submit"
@@ -304,6 +370,9 @@ async function StaffNav() {
       {canViewForms ? (
         <Link href="/staff/forms" className={drawerLink}>📝 Forms</Link>
       ) : null}
+      {canViewArticles ? (
+        <Link href="/staff/articles" className={drawerLink}>📰 Articles</Link>
+      ) : null}
       {canViewForms ? (
         <Link href="/staff/qotd" className={drawerLink}>💡 QOTD</Link>
       ) : null}
@@ -349,7 +418,7 @@ async function StaffNav() {
         <MobileNavMenu>{drawerLinks}</MobileNavMenu>
         <Link
           href="/staff"
-          className="flex-1 flex items-center justify-center gap-2 font-display text-lg text-navy hover:text-coral transition-colors"
+          className="flex-1 flex items-center justify-center gap-2 font-display text-lg text-navy hover:text-coral-deep transition-colors"
         >
           <span className="text-2xl">🛠️</span>
           <span>Staff</span>
@@ -360,7 +429,7 @@ async function StaffNav() {
       <nav className="card-sm hidden md:flex items-center justify-between gap-2 px-5 py-3">
         <Link
           href="/staff"
-          className="font-display text-xl text-navy hover:text-coral transition-colors flex items-center gap-2"
+          className="font-display text-xl text-navy hover:text-coral-deep transition-colors flex items-center gap-2"
         >
           <span className="text-2xl">🛠️</span>
           <span>Staff</span>

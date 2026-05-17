@@ -36,6 +36,12 @@ export default async function PracticeRoundPage({
     .limit(1);
   if (!round) notFound();
 
+  // Same exploit gate as /play/round/[n]: a live practice round must
+  // never render via the regular runner. Force the redirect.
+  if (round.isLive) {
+    redirect(`/play/live/${round.id}`);
+  }
+
   // Tiebreaker access gate — only the two players in the linked matchup
   // (and the host, for previewing) can take it. Everyone else gets a 404
   // so the URL doesn't leak the round's existence.

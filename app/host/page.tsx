@@ -91,8 +91,26 @@ export default async function HostPanel({
             🛠️ Host Panel
           </h1>
           <div className="flex gap-2 flex-wrap">
+            <Link
+              href="/host/finals-control"
+              className="pop pop-coral text-sm bg-coral text-white border-3 border-navy"
+            >
+              🎙️ Finals Control
+            </Link>
+            <Link href="/host/writing-session" className="pop pop-coral text-sm">
+              ✍️ Writing Session
+            </Link>
+            <Link href="/host/intercom" className="pop pop-coral text-sm">
+              💬 Intercom
+            </Link>
+            <Link href="/host/workflows" className="pop pop-coral text-sm">
+              🤖 Workflows
+            </Link>
             <Link href="/host/predictions" className="pop pop-coral text-sm">
               🔮 Predictions
+            </Link>
+            <Link href="/host/forum-roles" className="pop pop-coral text-sm">
+              🛡️ Forum roles
             </Link>
             <Link href="/host/email-analytics" className="pop pop-sky text-sm">
               📨 Emails
@@ -125,6 +143,29 @@ export default async function HostPanel({
             ✓ {ok}
           </div>
         ) : null}
+
+        {/* Finals weekend launcher — three big buttons live one click
+            away. Keep this prominent so it's impossible to miss when
+            it's go-time. */}
+        <Link
+          href="/host/finals-control"
+          className="card px-5 py-4 flex items-center gap-4 border-4 border-navy bg-gradient-to-r from-coral via-coral-deep to-navy text-white shadow-pop hover:-translate-y-0.5 transition-transform"
+          style={{ textDecoration: "none" }}
+        >
+          <div className="text-5xl bob">🎙️</div>
+          <div className="flex-1">
+            <p className="font-display text-xs uppercase tracking-[0.18em] opacity-80">
+              Finals weekend
+            </p>
+            <p className="font-display text-2xl md:text-3xl leading-tight">
+              Tournament Director Console →
+            </p>
+            <p className="font-body text-sm opacity-90 mt-1">
+              Launch Rehearsal · Losers&rsquo; Final · Winners&rsquo;
+              Final. One click each.
+            </p>
+          </div>
+        </Link>
 
         {/* The tournament status */}
         <section className="card px-5 py-5">

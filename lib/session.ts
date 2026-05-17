@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 
-type SessionUser = {
+export type SessionUser = {
   id: string;
   email: string | null;
   name: string | null;

@@ -16,7 +16,7 @@
 // as previous-round winners get resolved.
 
 import { db, schema } from "@/db";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { id as makeId } from "./ids";
 
 const { matchups, attempts, rounds, users, enrollments, tournaments } = schema;
@@ -372,6 +372,12 @@ export async function autoResolveByScore(
   tournamentId: string,
   roundIndex: number
 ) {
+  // Pick the un-gated chapter round. Skip tiebreaker- and losers-
+  // matchup-gated rounds — those resolve their own matchups directly
+  // and should never feed the chapter-wide autoresolve. Without this
+  // filter, having multiple rounds at the same chapter (e.g. two
+  // separate finals question sets, both gated to specific matchups)
+  // would cause the engine to pick one at random.
   const [quizRound] = await db
     .select()
     .from(rounds)
@@ -379,7 +385,9 @@ export async function autoResolveByScore(
       and(
         eq(rounds.tournamentId, tournamentId),
         eq(rounds.chapterNumber, roundIndex),
-        eq(rounds.isPractice, false)
+        eq(rounds.isPractice, false),
+        isNull(rounds.tiebreakerMatchupId),
+        isNull(rounds.losersMatchupId)
       )
     )
     .limit(1);

@@ -21,6 +21,12 @@ export async function submitPractice(formData: FormData) {
     .limit(1);
   if (!round) redirect("/play");
 
+  // Refuse direct writes to a live practice round; live mode owns its
+  // own timer + per-question lock.
+  if (round.isLive) {
+    redirect(`/play/live/${round.id}`);
+  }
+
   const picks: Record<string, string> = {};
   for (const [k, v] of formData.entries()) {
     if (k.startsWith("q:")) {

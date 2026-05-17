@@ -315,10 +315,27 @@ export async function safeguardText(
 
 // ─── text-to-speech ───────────────────────────────────────────────────
 
+// Orpheus v1 voices Groq actually exposes (verified against API
+// rejection message — earlier list was guesswork). The `voice` param
+// is REQUIRED. Default "diana" is a friendly female narrator that
+// suits the picture-book vibe; swap freely for variety.
+export const ORPHEUS_VOICES = [
+  "autumn",
+  "diana",
+  "hannah",
+  "austin",
+  "daniel",
+  "troy",
+] as const;
+export type OrpheusVoice = (typeof ORPHEUS_VOICES)[number];
+
 // Returns audio bytes (Buffer/Uint8Array). Caller is expected to stream/
 // store this — we don't write to R2 from here so the caller has full
 // control of the destination (and lazy-loading semantics).
-export async function generateSpeech(text: string): Promise<Uint8Array> {
+export async function generateSpeech(
+  text: string,
+  voice: OrpheusVoice = "diana"
+): Promise<Uint8Array> {
   const res = await fetch(`${GROQ_BASE}/audio/speech`, {
     method: "POST",
     headers: {
@@ -328,9 +345,12 @@ export async function generateSpeech(text: string): Promise<Uint8Array> {
     body: JSON.stringify({
       model: QOTD_MODEL_TTS,
       input: text.slice(0, 800),
-      // Orpheus default voice; the API accepts an optional `voice` param
-      // but we let the model decide for v1.
-      response_format: "mp3",
+      voice,
+      // Orpheus on Groq only outputs WAV (verified against API
+      // rejection — "response_format must be one of [wav]"). The
+      // route handler streams these bytes through with the matching
+      // audio/wav content-type.
+      response_format: "wav",
     }),
   });
   if (!res.ok) {

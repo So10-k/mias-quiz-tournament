@@ -49,7 +49,13 @@ export type Permission =
   // forms (custom forms feature) — read covers viewing forms + responses,
   // write covers creating/editing/publishing/deleting
   | "forms:read"
-  | "forms:write";
+  | "forms:write"
+  // articles / blog CMS — split publish + delete out of write so a junior
+  // editor can draft + revise without going live or destroying rows.
+  | "articles:read"
+  | "articles:write"
+  | "articles:publish"
+  | "articles:delete";
 
 const VIEWER: ReadonlySet<Permission> = new Set<Permission>([
   "bracket:read",
@@ -61,6 +67,7 @@ const VIEWER: ReadonlySet<Permission> = new Set<Permission>([
   "attempts:read",
   "files:read",
   "forms:read",
+  "articles:read",
 ]);
 
 const EDITOR: ReadonlySet<Permission> = new Set<Permission>([
@@ -71,6 +78,8 @@ const EDITOR: ReadonlySet<Permission> = new Set<Permission>([
   "emails:write",
   "files:write",
   "forms:write",
+  "articles:write",
+  "articles:publish",
 ]);
 
 const ADMIN: ReadonlySet<Permission> = new Set<Permission>([
@@ -78,6 +87,7 @@ const ADMIN: ReadonlySet<Permission> = new Set<Permission>([
   "staff:read",
   "staff:write",
   "audit:read",
+  "articles:delete",
 ]);
 
 const ROLE_PERMISSIONS: Record<string, ReadonlySet<Permission>> = {

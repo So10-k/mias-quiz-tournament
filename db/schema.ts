@@ -52,11 +52,46 @@ export const subject = pgEnum("subject", [
   "sports",
 ]);
 export const librarySource = pgEnum("library_source", ["seed", "host"]);
+export const articleStatus = pgEnum("article_status", [
+  "draft",
+  "published",
+  "archived",
+]);
+export const articleVisibility = pgEnum("article_visibility", [
+  "public",
+  "subscribers_only",
+  "unlisted",
+]);
+export const subscriptionFrequency = pgEnum("subscription_frequency", [
+  "daily",
+  "weekly",
+  "monthly",
+]);
 export const fileAccessMode = pgEnum("file_access_mode", [
   "public",
   "login",
   "users",
   "password",
+]);
+
+// Pre-production "writing session" — the four-step doc workflow that
+// goes AI draft → Sam review → Mia delegating → Mia + Juliette editing
+// → Sam finalize. See lib/writing-session.ts.
+export const writingScriptStatus = pgEnum("writing_script_status", [
+  "draft", // AI generated; Sam reviewing/editing
+  "delegating", // Mia assigning lines to herself / Juliette
+  "editing", // Mia + Juliette editing their assigned lines
+  "finalized", // Locked; PDFs available
+]);
+
+export const writingScriptCharacter = pgEnum("writing_script_character", [
+  "narrator", // off-camera voiceover
+  "host", // generic show host before assignment
+  "cohost", // generic co-host
+  "sam", // director / floor / cue
+  "mia",
+  "juliette",
+  "both", // unison
 ]);
 
 // ─── core ───────────────────────────────────────────────────────────────────
@@ -73,6 +108,10 @@ export const users = pgTable(
     image: text("image"),
     role: userRole("role").notNull().default("reader"),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    // Set when the user agrees to the finals confidentiality terms
+    // via the Discourse NDA PM. Used by the SSO flow to hold any
+    // ungagreed finalist in `pending_finals_nda`.
+    finalsNdaAgreedAt: timestamp("finals_nda_agreed_at", { mode: "date" }),
   },
   (t) => ({
     emailIdx: uniqueIndex("users_email_idx").on(t.email),
@@ -187,6 +226,43 @@ export const rounds = pgTable("rounds", {
   losersMatchupId: text("losers_matchup_id"),
   opensAt: timestamp("opens_at", { mode: "date" }),
   closesAt: timestamp("closes_at", { mode: "date" }),
+  // ─── live mode ────────────────────────────────────────────────────
+  // When true, this round is hosted live: the host drives question
+  // advancement for everyone, players answer in sync, and spectators
+  // see the same thing without writing answers. Used for the finals
+  // over Zoom/webinar.
+  isLive: boolean("is_live").notNull().default(false),
+  // 'pre_start' = round set up but not started; 'running' = a question
+  // is up; 'revealing' = all questions done, host walking through
+  // answers; 'complete' = scoreboard frozen.
+  liveStatus: text("live_status").notNull().default("pre_start"),
+  // Index into the question list (zero-based). null = not yet started.
+  liveCurrentQuestionIndex: integer("live_current_question_index"),
+  // Set whenever the host advances; server-side lock is computed as
+  // `liveCurrentQuestionStartedAt + liveQuestionSeconds`.
+  liveCurrentQuestionStartedAt: timestamp(
+    "live_current_question_started_at",
+    { mode: "date" }
+  ),
+  // Per-question time budget. Default 30s — generous for read-aloud.
+  liveQuestionSeconds: integer("live_question_seconds").notNull().default(30),
+  // When the host clicked "Start Round" — used for analytics and the
+  // spectator UI's "live since…" badge.
+  liveStartedAt: timestamp("live_started_at", { mode: "date" }),
+  // ─── live effects ────────────────────────────────────────────────
+  // Host-triggered visual/audio effects that fire on every connected
+  // client at once. Three columns power the whole system:
+  //   liveEffect         — the effect identifier (confetti, fanfare,
+  //                        boom, fireworks, drumroll, approve, tomato,
+  //                        hearts, pressure, banner). Null = no effect.
+  //   liveEffectAt       — fires the effect; doubles as a dedup key
+  //                        (clients only play effects whose timestamp
+  //                        is newer than the last one they played).
+  //   liveEffectMessage  — optional text for "banner"-style effects
+  //                        where the host types a custom string.
+  liveEffect: text("live_effect"),
+  liveEffectAt: timestamp("live_effect_at", { mode: "date" }),
+  liveEffectMessage: text("live_effect_message"),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
 });
 
@@ -672,6 +748,169 @@ export const qotdResponses = pgTable(
   })
 );
 
+// ─── articles / blog ──────────────────────────────────────────────────
+// Block-document CMS. Articles are authored by in-app users (Mia +
+// Sam — both have role=author) or staff users (when delegated). The
+// body lives in `bodyJson` as an ordered array of block objects;
+// shape is validated at save-time in lib/article-blocks.ts.
+
+export const articles = pgTable(
+  "articles",
+  {
+    id: text("id").primaryKey(),
+    // URL-safe identifier — public article lives at /blog/<slug>.
+    slug: text("slug").notNull().unique(),
+    title: text("title").notNull(),
+    subtitle: text("subtitle"),
+    // 1–2 sentence summary used on the index card and in the email
+    // digest preheader. Optional.
+    dek: text("dek"),
+    coverImageUrl: text("cover_image_url"),
+    // Ordered array of blocks — { id, type, data }. Source of truth
+    // for the rendered article + email body.
+    bodyJson: jsonb("body_json").notNull().default([]),
+    // Plaintext flatten of bodyJson — used for search snippets +
+    // email-client text fallback.
+    bodyText: text("body_text").notNull().default(""),
+    readMinutes: integer("read_minutes").notNull().default(1),
+    status: articleStatus("status").notNull().default("draft"),
+    visibility: articleVisibility("visibility").notNull().default("public"),
+    // Author resolution: prefer authorUserId (Mia/Sam) and fall back
+    // to authorStaffId. Denormalized authorName/avatar preserve
+    // attribution if accounts are deleted.
+    authorUserId: text("author_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    authorStaffId: text("author_staff_id").references(() => staffUsers.id, {
+      onDelete: "set null",
+    }),
+    authorName: text("author_name").notNull(),
+    authorAvatarUrl: text("author_avatar_url"),
+    publishedAt: timestamp("published_at", { mode: "date" }),
+    // Cron picks articles with publishedAt > subscriber.lastSentAt;
+    // this column lets us also flag "skip from digest" manually.
+    digestEligible: boolean("digest_eligible").notNull().default(true),
+    viewCount: integer("view_count").notNull().default(0),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    statusIdx: index("articles_status_idx").on(t.status),
+    publishedIdx: index("articles_published_idx").on(t.publishedAt),
+  })
+);
+
+// Newsletter subscriptions. Email-keyed (one active sub per email).
+// Anonymous signups are allowed — userId is filled when the
+// subscriber is also a signed-in player. Confirmation token gates
+// double opt-in; unsubscribe token lets recipients leave with one
+// click from any email.
+export const newsletterSubscriptions = pgTable(
+  "newsletter_subscriptions",
+  {
+    id: text("id").primaryKey(),
+    email: text("email").notNull(),
+    userId: text("user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    frequency: subscriptionFrequency("frequency").notNull().default("weekly"),
+    confirmationToken: text("confirmation_token").notNull().unique(),
+    confirmedAt: timestamp("confirmed_at", { mode: "date" }),
+    unsubscribeToken: text("unsubscribe_token").notNull().unique(),
+    unsubscribedAt: timestamp("unsubscribed_at", { mode: "date" }),
+    lastSentAt: timestamp("last_sent_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    emailIdx: uniqueIndex("newsletter_subs_email_idx").on(t.email),
+  })
+);
+
+// ─── forum group grants ────────────────────────────────────────────────
+// Manual group memberships on the discuss.miaswebsites.art forum,
+// granted from /host/forum-roles. The Discourse SSO flow combines
+// these with bracket-derived auto-groups (players / spectators /
+// semi_finalists / finalists) on every login.
+//
+// Grantable groups are intentionally limited (see lib/forum-grants.ts
+// MANUAL_FORUM_GROUPS) — staff-style mod tiers + the author group.
+export const forumGroupGrants = pgTable(
+  "forum_group_grants",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // Discourse group name (matches what the SSO payload sends as
+    // add_groups). e.g. "authors", "trial_moderators", "honorary_mods",
+    // "regulars".
+    groupName: text("group_name").notNull(),
+    grantedAt: timestamp("granted_at", { mode: "date" })
+      .notNull()
+      .defaultNow(),
+    grantedByUserId: text("granted_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+  },
+  (t) => ({
+    uniqUserGroup: uniqueIndex("forum_group_grants_user_group_idx").on(
+      t.userId,
+      t.groupName
+    ),
+    userIdx: index("forum_group_grants_user_idx").on(t.userId),
+  })
+);
+
+// ─── support tickets ───────────────────────────────────────────────────
+// Mirror of Discourse ticket topics. Each row is created when a user
+// submits the /support form; the canonical thread lives in the
+// "Support Tickets" Discourse category and we fetch messages from
+// there on demand. We persist enough metadata locally to:
+//   • list a logged-in user's tickets without searching Discourse
+//   • show the right status badge
+//   • map back to the topic for replies + admin lookups
+//
+// Status mirrors what the @support_bot changestatus command sets.
+// The plugin POSTs to /api/support/sync-status when status changes
+// so this row stays in sync with Discourse.
+export const supportTicketStatus = pgEnum("support_ticket_status", [
+  "open",
+  "pending",
+  "resolved",
+  "closed",
+]);
+
+export const supportTickets = pgTable(
+  "support_tickets",
+  {
+    id: text("id").primaryKey(),
+    // Canonical topic id on discuss.miaswebsites.art. Unique because
+    // each ticket gets its own topic.
+    discourseTopicId: integer("discourse_topic_id").notNull(),
+    discoursePostId: integer("discourse_post_id").notNull(),
+    subject: text("subject").notNull(),
+    // Submitter info. email is the load-bearing field — used for
+    // the bot's `respond` command. userId is set when the submitter
+    // was signed in; null for anonymous submissions.
+    submitterEmail: text("submitter_email").notNull(),
+    submitterName: text("submitter_name").notNull(),
+    submitterUserId: text("submitter_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    // Optional category tag from the dropdown ("bug", "tournament", ...)
+    topic: text("topic"),
+    // Latest known status. Updated via the plugin's sync-status hook.
+    status: supportTicketStatus("status").notNull().default("open"),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    uniqTopic: uniqueIndex("support_tickets_topic_idx").on(t.discourseTopicId),
+    userIdx: index("support_tickets_user_idx").on(t.submitterUserId),
+    emailIdx: index("support_tickets_email_idx").on(t.submitterEmail),
+  })
+);
+
 // ─── prediction game ───────────────────────────────────────────────────
 // March-madness style: signed-in users predict winners of undecided
 // matchups for points. Per-matchup edits are allowed until the matchup is
@@ -701,6 +940,137 @@ export const predictions = pgTable(
       t.userId,
       t.matchupId
     ),
+  })
+);
+
+// ─── host workflows ────────────────────────────────────────────────────
+// Host-runnable workflows (audit, sync, email blast, etc.). Each row is
+// one run, with the structured result_json blob shaped per workflow.
+// PDF reports are generated on demand from this row.
+
+export const workflowRuns = pgTable(
+  "workflow_runs",
+  {
+    id: text("id").primaryKey(),
+    /** Static workflow id (e.g. "finals-readiness"). Maps to a
+        registered lib/workflows/<id>.ts module. */
+    workflowId: text("workflow_id").notNull(),
+    triggeredByUserId: text("triggered_by_user_id").references(
+      () => users.id,
+      { onDelete: "set null" }
+    ),
+    startedAt: timestamp("started_at", { mode: "date" })
+      .notNull()
+      .defaultNow(),
+    completedAt: timestamp("completed_at", { mode: "date" }),
+    /** 'running' | 'ok' | 'failed' */
+    status: text("status").notNull().default("running"),
+    /** Human-readable one-liner shown in the run list. */
+    summary: text("summary"),
+    /** Per-workflow structured result. Used by the PDF renderer. */
+    resultJson: jsonb("result_json"),
+    /** How many emails the workflow actually sent. */
+    emailsSent: integer("emails_sent").notNull().default(0),
+    /** Error message if status='failed'. */
+    error: text("error"),
+  },
+  (t) => ({
+    workflowIdx: index("workflow_runs_workflow_idx").on(t.workflowId),
+    startedIdx: index("workflow_runs_started_idx").on(t.startedAt),
+  })
+);
+
+// ─── writing session ───────────────────────────────────────────────────
+// AI-drafted show script that goes through a four-stage approval +
+// delegation flow. See lib/writing-session.ts for the state machine.
+
+export const writingScripts = pgTable("writing_scripts", {
+  id: text("id").primaryKey(),
+  title: text("title").notNull(),
+  // Free-text brief used by the generator + a record of intent.
+  brief: text("brief").notNull().default(""),
+  status: writingScriptStatus("status").notNull().default("draft"),
+  // Soft references to the in-app users for analytics; null when the
+  // script was created before users were wired in (e.g. for finals).
+  createdByUserId: text("created_by_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  finalizedAt: timestamp("finalized_at", { mode: "date" }),
+});
+
+export const writingScriptParts = pgTable(
+  "writing_script_parts",
+  {
+    id: text("id").primaryKey(),
+    scriptId: text("script_id")
+      .notNull()
+      .references(() => writingScripts.id, { onDelete: "cascade" }),
+    order: integer("order").notNull(),
+    title: text("title").notNull(),
+    // Optional one-paragraph description of what happens in this part.
+    description: text("description"),
+  },
+  (t) => ({
+    scriptOrderIdx: index("writing_script_parts_script_order_idx").on(
+      t.scriptId,
+      t.order
+    ),
+  })
+);
+
+export const writingScriptLines = pgTable(
+  "writing_script_lines",
+  {
+    id: text("id").primaryKey(),
+    partId: text("part_id")
+      .notNull()
+      .references(() => writingScriptParts.id, { onDelete: "cascade" }),
+    order: integer("order").notNull(),
+    character: writingScriptCharacter("character").notNull(),
+    // The spoken line.
+    text: text("text").notNull(),
+    // Stage direction / cue — shown only on Sam's master PDF.
+    cue: text("cue"),
+    // Filled during "delegating": which helper owns edit rights when we
+    // hit "editing" phase. 'mia' | 'juliette' | null (unassigned).
+    assignedTo: text("assigned_to"),
+    // Audit columns so the host dashboard can show "Juliette edited 3
+    // mins ago".
+    lastEditedBy: text("last_edited_by"),
+    lastEditedAt: timestamp("last_edited_at", { mode: "date" }),
+  },
+  (t) => ({
+    partOrderIdx: index("writing_script_lines_part_order_idx").on(
+      t.partId,
+      t.order
+    ),
+  })
+);
+
+// Public access to /writing-session is PIN-gated. Sam generates a
+// distinct 4-digit PIN per helper from /host/writing-session/[id].
+export const writingScriptPins = pgTable(
+  "writing_script_pins",
+  {
+    id: text("id").primaryKey(),
+    scriptId: text("script_id")
+      .notNull()
+      .references(() => writingScripts.id, { onDelete: "cascade" }),
+    pin: text("pin").notNull(),
+    // 'mia' | 'juliette' — drives which lines the holder can edit
+    // during the "editing" phase.
+    forPerson: text("for_person").notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { mode: "date" }),
+    revokedAt: timestamp("revoked_at", { mode: "date" }),
+  },
+  (t) => ({
+    // PINs are unique across all scripts so the public landing page
+    // can resolve a PIN to its script without asking which script.
+    pinIdx: uniqueIndex("writing_script_pins_pin_idx").on(t.pin),
+    scriptIdx: index("writing_script_pins_script_idx").on(t.scriptId),
   })
 );
 
