@@ -67,6 +67,9 @@ export default async function PlayHome() {
 
   const activeRound = rounds.find((r) => r.status === "active");
   const closedRounds = rounds.filter((r) => r.status === "closed");
+  // Surface any live-mode round the host has set up. Displayed regardless
+  // of `status`/eliminated — even spectators get to watch a live round.
+  const liveRound = allRounds.find((r) => r.isLive);
   const lives = Math.max(0, tournament.strikeLimit - (enrollment?.strikeCount ?? 0));
   const eliminated = !!enrollment?.eliminatedAt;
   const myActiveAttempt = activeRound ? attempts.get(activeRound.id) : null;
@@ -101,6 +104,48 @@ export default async function PlayHome() {
             </span>
           )}
         </div>
+
+        {/* Live-now banner. Host has flipped a round into live mode —
+            everyone (eliminated or not) gets a CTA to join the synced
+            view. Pulses with the same coral→gold treatment as the
+            homepage hype banner so it grabs attention. */}
+        {liveRound ? (
+          <Link
+            href={`/play/live/${liveRound.id}`}
+            className="live-cta relative w-full px-6 py-5 text-center overflow-hidden"
+            style={{ textDecoration: "none" }}
+          >
+            <span
+              aria-hidden
+              className="absolute -top-2 -right-2 bob font-display text-xs px-3 py-1 rounded-full border-3 border-navy bg-coral text-white shadow-pop-sm rotate-6"
+            >
+              🔴 LIVE
+            </span>
+            <p className="font-display text-xs uppercase tracking-[0.25em] text-white/90">
+              Hosted live right now
+            </p>
+            <h2 className="font-display text-3xl md:text-4xl text-white mt-1 drop-shadow-[3px_3px_0_var(--navy)]">
+              🎙️ {liveRound.title}
+            </h2>
+            <p className="font-display text-base text-white mt-2">
+              Tap to join the synced room →
+            </p>
+            <style>{`
+              .live-cta {
+                background: linear-gradient(135deg,#FF6B9D 0%,#FF4D6D 35%,#FF8C42 70%,#FFB627 100%);
+                background-size:220% 220%;
+                border:4px solid var(--navy);
+                border-radius:22px;
+                box-shadow:8px 8px 0 0 var(--navy);
+                animation: live-pan 6s ease-in-out infinite;
+              }
+              @keyframes live-pan {
+                0%,100% { background-position: 0% 50%; }
+                50% { background-position: 100% 50%; }
+              }
+            `}</style>
+          </Link>
+        ) : null}
 
         {/* Big "this week" card */}
         {activeRound ? (
@@ -164,8 +209,37 @@ export default async function PlayHome() {
           </div>
         )}
 
-        {/* Practice rounds — don't count, available to everyone */}
-        {practiceRounds.length > 0 ? (
+        {/* Spectator mode banner — explicit cue for eliminated players that
+            the chapter quizzes (and pure practice rounds) are off-limits.
+            Tiebreaker / make-up rounds aren't shown here anyway since the
+            practiceRounds filter excludes anything with tiebreakerMatchupId. */}
+        {eliminated ? (
+          <div className="card px-6 py-6 w-full text-center bg-sky1">
+            <div className="text-5xl">👀</div>
+            <h3 className="font-display text-2xl text-navy mt-3">
+              You&rsquo;re in spectator mode
+            </h3>
+            <p className="font-body text-base text-navy-soft mt-2 max-w-md mx-auto">
+              You&rsquo;re out of both brackets, so the chapter quizzes and
+              practice rounds are locked. The bracket, standings, and
+              predictions still work — settle in and watch the rest unfold.
+            </p>
+            <div className="mt-5 flex items-center justify-center gap-3 flex-wrap">
+              <Link href="/bracket" className="pop pop-coral">
+                🏆 Bracket
+              </Link>
+              <Link href="/standings" className="pop pop-yellow">
+                📊 Standings
+              </Link>
+              <Link href="/predict" className="pop pop-sky">
+                🔮 Predict
+              </Link>
+            </div>
+          </div>
+        ) : null}
+
+        {/* Practice rounds — don't count, hidden when you're a spectator. */}
+        {!eliminated && practiceRounds.length > 0 ? (
           <div className="card-sm px-5 py-5 w-full bg-sky1">
             <div className="flex items-baseline justify-between gap-3 mb-3">
               <h3 className="font-display text-xl text-navy">

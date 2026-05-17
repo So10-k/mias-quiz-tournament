@@ -27,6 +27,14 @@ export async function submitChapter(formData: FormData) {
     .limit(1);
   if (!round) redirect("/play");
 
+  // Refuse to write to a live round via the regular submit path. The
+  // live mode owns its own server-enforced timer + finalist gate; if
+  // submitChapter went through, a player could front-load their answer
+  // key before "Start Round" ever fires.
+  if (round.isLive) {
+    redirect(`/play/live/${round.id}`);
+  }
+
   const picks: Record<string, string> = {};
   for (const [k, v] of formData.entries()) {
     if (k.startsWith("q:")) {

@@ -48,6 +48,17 @@ export default async function ChapterPage({
     .limit(1);
   if (!round) notFound();
 
+  // CRITICAL: live rounds must NEVER render via the regular ChapterRunner.
+  // The runner sends every question + every option's `isCorrect` to the
+  // client and submitChapter writes straight to `attempts`/`answers`,
+  // which live mode reuses. A finalist visiting /play/round/N for a
+  // round flagged `isLive` could pre-populate correct answers before
+  // "Start Round" fires AND read the answer key from their browser
+  // bundle. Hard-redirect to the live runner.
+  if (round.isLive) {
+    redirect(`/play/live/${round.id}`);
+  }
+
   const data = await getRoundWithQuestions(round.id);
   if (!data) notFound();
 

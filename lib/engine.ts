@@ -200,14 +200,30 @@ export async function submitAttempt({ userId, roundId, picks }: SubmitInput) {
   }
 
   const isPractice = round.round.isPractice === true;
+  const isTiebreaker =
+    isPractice && !!round.round.tiebreakerMatchupId;
 
-  // For real rounds we require enrollment and not-eliminated. Practice
-  // rounds skip both — anyone signed in can take them.
+  // Real rounds require enrollment + not-eliminated.
+  // Practice rounds split into two flavours:
+  //   • "pure" practice (no tiebreakerMatchupId) — fun warm-ups. Eliminated
+  //     players can't submit these; spectator mode means spectator. They
+  //     can still review past attempts.
+  //   • Tiebreaker / make-up rounds (tiebreakerMatchupId set) — these are
+  //     EXPLICITLY for the two players in the linked matchup, often as a
+  //     comeback chance after losing. We allow eliminated players through
+  //     here since the whole point is to let them re-enter the bracket.
   let enrollment = await getEnrollment(userId, round.round.tournamentId);
   if (!isPractice) {
     if (!enrollment) throw new Error("Not enrolled in this tournament.");
     if (enrollment.eliminatedAt) {
       throw new Error("This player has been eliminated.");
+    }
+  } else if (!isTiebreaker) {
+    // Pure practice: gate eliminated players out.
+    if (enrollment?.eliminatedAt) {
+      throw new Error(
+        "You're out of the bracket — practice rounds are for active players."
+      );
     }
   }
 

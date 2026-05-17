@@ -16,7 +16,7 @@
 // as previous-round winners get resolved.
 
 import { db, schema } from "@/db";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { id as makeId } from "./ids";
 
 const { matchups, attempts, rounds, users, enrollments, tournaments } = schema;
@@ -372,6 +372,12 @@ export async function autoResolveByScore(
   tournamentId: string,
   roundIndex: number
 ) {
+  // Pick the un-gated chapter round. Skip tiebreaker- and losers-
+  // matchup-gated rounds — those resolve their own matchups directly
+  // and should never feed the chapter-wide autoresolve. Without this
+  // filter, having multiple rounds at the same chapter (e.g. two
+  // separate finals question sets, both gated to specific matchups)
+  // would cause the engine to pick one at random.
   const [quizRound] = await db
     .select()
     .from(rounds)
@@ -379,7 +385,9 @@ export async function autoResolveByScore(
       and(
         eq(rounds.tournamentId, tournamentId),
         eq(rounds.chapterNumber, roundIndex),
-        eq(rounds.isPractice, false)
+        eq(rounds.isPractice, false),
+        isNull(rounds.tiebreakerMatchupId),
+        isNull(rounds.losersMatchupId)
       )
     )
     .limit(1);
@@ -456,35 +464,42 @@ export async function syncEliminationFromBracket(tournamentId: string) {
   const ms = await db
     .select()
     .from(matchups)
-    .where(eq(matchups.tournamentId, tournamentId))
-    .orderBy(asc(matchups.roundIndex));
+    .where(eq(matchups.tournamentId, tournamentId));
   const ens = await db
     .select()
     .from(enrollments)
     .where(eq(enrollments.tournamentId, tournamentId));
 
-  const stillIn = new Set<string>();
-  // A player is "still in" if they appear as A or B in a matchup that has
-  // not yet been resolved against them.
-  for (const m of ms) {
-    if (m.playerAUserId && m.winnerUserId !== m.playerBUserId)
-      stillIn.add(m.playerAUserId);
-    if (m.playerBUserId && m.winnerUserId !== m.playerAUserId)
-      stillIn.add(m.playerBUserId);
-    // If matchup is fully resolved, the loser is removed from stillIn.
-    if (m.winnerUserId) {
-      const loser =
-        m.winnerUserId === m.playerAUserId
-          ? m.playerBUserId
-          : m.winnerUserId === m.playerBUserId
-          ? m.playerAUserId
-          : null;
-      if (loser) stillIn.delete(loser);
+  // A player is "still in" iff they are currently seated in at least one
+  // UNRESOLVED matchup. We rely on propagateWinners to correctly seat
+  // winners into their next-round matchup and main-R1 losers into the LB,
+  // so this single condition covers everything:
+  //
+  //   • You won R1, propagateWinners put you in R2 → if R2 is unresolved
+  //     and you're seated, you're in. If R2 already resolved against you
+  //     and there's no LB seat, you're out.
+  //   • You lost main R1, propagateWinners routed you to LB R1 → if LB
+  //     R1 is unresolved, you're in.
+  //   • You lost LB at any round → no further matchup seats you, you're
+  //     out.
+  //   • You're a forgotten old-round winner with no current seating →
+  //     out (you got eliminated downstream).
+  //
+  // Don't be tempted to add "is winner of a resolved matchup" as an
+  // OR — that's the bug we just fixed. A R1 winner who lost in R2 is
+  // OUT, not still alive because of their old win.
+  function isStillIn(userId: string): boolean {
+    for (const m of ms) {
+      const onA = m.playerAUserId === userId;
+      const onB = m.playerBUserId === userId;
+      if (!onA && !onB) continue;
+      if (!m.winnerUserId) return true;
     }
+    return false;
   }
 
   for (const e of ens) {
-    const isOut = !stillIn.has(e.userId);
+    const isOut = !isStillIn(e.userId);
     if (isOut && !e.eliminatedAt) {
       await db
         .update(enrollments)

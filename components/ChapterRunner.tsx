@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { submitChapter } from "@/app/play/round/[n]/actions";
 import { submitPractice } from "@/app/play/practice/[id]/actions";
+import { TTSButton } from "@/components/TTSButton";
 
 type Option = { id: string; label: string; isCorrect: boolean };
 type Question = { id: string; prompt: string; options: Option[] };
@@ -24,6 +25,14 @@ const palette = ["pop-coral", "pop-yellow", "pop-grass", "pop-sky"];
 const TAB_STRIKE_LIMIT = 3;
 const FREE_STRIKES = TAB_STRIKE_LIMIT - 1;
 
+// Hard cap on how long you can sit on a single question. Once the clock
+// hits zero, whatever you've picked locks in (or nothing, if you didn't
+// pick) and you auto-advance. The locked answer stays locked even if you
+// navigate back via the dot row — no second chances. This is the main
+// counter against second-device cheating: 15s is plenty to read and pick,
+// nowhere near enough to pull out a phone, search, and re-confirm.
+const SECONDS_PER_QUESTION = 15;
+
 export function ChapterRunner({
   tournamentId,
   chapterNumber,
@@ -41,9 +50,35 @@ export function ChapterRunner({
   const [strikeToast, setStrikeToast] = useState<number>(0);
   const [forceRestart, setForceRestart] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // Per-question 15s timer. Once a question's timer fires, its id goes in
+  // `lockedQuestions` and stays there for the rest of the runner — we
+  // don't reset on revisit, so the back button can't be used to buy time.
+  const [secondsLeft, setSecondsLeft] = useState<number>(SECONDS_PER_QUESTION);
+  const [lockedQuestions, setLockedQuestions] = useState<
+    Record<string, true>
+  >({});
+  // We use a ref alongside state so the interval handler reads the latest
+  // value without re-creating the interval on every tick.
+  const lockedRef = useRef<Record<string, true>>({});
+  lockedRef.current = lockedQuestions;
+  const picksRef = useRef<Record<string, string>>({});
+  picksRef.current = picks;
 
   const last = questions.length - 1;
   const allAnswered = questions.every((q) => picks[q.id]);
+  // A question is "settled" if the player either picked or its timer
+  // ran out. At the confirm page every question SHOULD be settled —
+  // forward-only nav means you can't reach confirm otherwise. Skipped
+  // count = settled-but-not-picked (timer expired with no choice).
+  const skippedCount = questions.filter(
+    (q) => !picks[q.id] && lockedQuestions[q.id]
+  ).length;
+  const allSettled = questions.every(
+    (q) => !!picks[q.id] || !!lockedQuestions[q.id]
+  );
+  const onQuestion = page >= 0 && page <= last;
+  const currentQ = onQuestion ? questions[page] : null;
+  const currentLocked = !!(currentQ && lockedQuestions[currentQ.id]);
 
   const restart = () => {
     setPicks({});
@@ -52,6 +87,8 @@ export function ChapterRunner({
     setTabStrikes(0);
     setStrikeToast(0);
     setForceRestart(false);
+    setLockedQuestions({});
+    setSecondsLeft(SECONDS_PER_QUESTION);
   };
 
   // Tab-leave guard. Each visibilitychange→hidden bumps a counter; the third
@@ -78,6 +115,36 @@ export function ChapterRunner({
     const t = setTimeout(() => setStrikeToast(0), 6000);
     return () => clearTimeout(t);
   }, [strikeToast, forceRestart]);
+
+  // Per-question countdown. Resets to SECONDS_PER_QUESTION on landing on
+  // a NEW (unlocked) question; ticks once per second; when it hits 0,
+  // locks that question and auto-advances. Already-locked questions don't
+  // run the timer (you're just reviewing your locked-in pick).
+  useEffect(() => {
+    if (!onQuestion || !currentQ || forceRestart) return;
+    if (lockedQuestions[currentQ.id]) return; // already locked, no timer
+    setSecondsLeft(SECONDS_PER_QUESTION);
+    const qid = currentQ.id;
+    const startedAt = Date.now();
+    const tick = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+      const remaining = Math.max(0, SECONDS_PER_QUESTION - elapsed);
+      setSecondsLeft(remaining);
+      if (remaining <= 0) {
+        clearInterval(tick);
+        // Lock this question's pick (whatever's currently selected, if
+        // anything) and advance to the next page. We use refs to read the
+        // latest picks/locked state without making this effect re-run on
+        // every keystroke.
+        if (!lockedRef.current[qid]) {
+          setLockedQuestions((prev) => ({ ...prev, [qid]: true }));
+        }
+        setPage((p) => p + 1);
+      }
+    }, 200);
+    return () => clearInterval(tick);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, currentQ?.id, forceRestart]);
 
   // Block keyboard copy/select-all/save while in the runner. CSS already
   // handles selection, but Ctrl/Cmd+C will still copy a focused option label
@@ -223,16 +290,18 @@ export function ChapterRunner({
         </div>
       ) : null}
 
-      {/* progress dots */}
+      {/* Progress dots — purely display-only. Were clickable previously but
+          the back-and-forth navigation gave players a way to reset the
+          per-question timer by leaving and re-entering. Once you commit
+          (timer expires or you click Next/Done), there's no going back. */}
       <div className="flex items-center justify-center gap-2 mb-5">
         {questions.map((_, i) => {
           const ans = !!picks[questions[i].id];
           const here = page === i;
           return (
-            <button
+            <span
               key={i}
-              onClick={() => setPage(i)}
-              aria-label={`Question ${i + 1}`}
+              aria-label={`Question ${i + 1}${here ? " (current)" : ans ? " (answered)" : ""}`}
               className={
                 "w-4 h-4 rounded-full border-2 border-navy " +
                 (here ? "bg-coral" : ans ? "bg-grass" : "bg-white")
@@ -279,28 +348,76 @@ export function ChapterRunner({
             transition={{ duration: 0.18 }}
             className="card px-7 py-7"
           >
-            <p className="font-display text-base text-navy-soft uppercase tracking-wider">
-              Question {page + 1} of {questions.length}
-            </p>
-            <h2 className="font-display text-3xl md:text-4xl text-navy mt-2">
-              {questions[page].prompt}
-            </h2>
+            <div className="flex items-baseline justify-between gap-3">
+              <p className="font-display text-base text-navy-soft uppercase tracking-wider">
+                Question {page + 1} of {questions.length}
+              </p>
+              {currentLocked ? (
+                <span className="font-display text-xs px-3 py-1 rounded-full border-2 border-navy bg-navy/10 text-navy">
+                  🔒 Locked
+                </span>
+              ) : (
+                <span
+                  className={
+                    "font-display text-sm px-3 py-1 rounded-full border-2 border-navy " +
+                    (secondsLeft <= 5
+                      ? "bg-coral text-white"
+                      : "bg-sun text-navy")
+                  }
+                  style={{
+                    transition: "background-color 0.2s",
+                  }}
+                  aria-live="polite"
+                >
+                  ⏱ {secondsLeft}s
+                </span>
+              )}
+            </div>
+            <div className="mt-2 flex items-start justify-between gap-3">
+              <h2 className="font-display text-3xl md:text-4xl text-navy flex-1">
+                {questions[page].prompt}
+              </h2>
+              {/* Read-aloud — pulls audio from /api/tts (Groq Orpheus).
+                  Compact icon-only so it doesn't crowd the question. */}
+              <TTSButton
+                key={questions[page].id}
+                text={(() => {
+                  const q = questions[page];
+                  const opts = q.options
+                    .map(
+                      (o, i) =>
+                        `${String.fromCharCode(65 + i)}. ${o.label}`
+                    )
+                    .join(". ");
+                  return `${q.prompt}. ${opts}`;
+                })()}
+                compact
+                className="pop pop-sky text-sm px-3 py-1.5 shrink-0"
+              />
+            </div>
 
             <div className="mt-7 grid grid-cols-1 md:grid-cols-2 gap-3">
               {questions[page].options.map((o, oi) => {
                 const picked = picks[questions[page].id] === o.id;
+                const disabled = currentLocked;
                 return (
                   <button
                     key={o.id}
                     type="button"
-                    onClick={() =>
-                      setPicks((p) => ({ ...p, [questions[page].id]: o.id }))
-                    }
+                    onClick={() => {
+                      if (currentLocked) return;
+                      setPicks((p) => ({
+                        ...p,
+                        [questions[page].id]: o.id,
+                      }));
+                    }}
+                    disabled={disabled}
                     className={
                       "pop text-left text-lg w-full justify-start " +
                       (picked
                         ? palette[oi % palette.length]
-                        : "pop-white")
+                        : "pop-white") +
+                      (disabled ? " opacity-70 cursor-not-allowed" : "")
                     }
                   >
                     <span className="font-display text-2xl mr-2">
@@ -312,28 +429,50 @@ export function ChapterRunner({
                 );
               })}
             </div>
+            {currentLocked ? (
+              <p className="font-body text-xs text-navy-soft mt-3 italic">
+                Time&rsquo;s up on this one — your answer is locked in.
+                {!picks[questions[page].id]
+                  ? " (No pick made → counts as wrong.)"
+                  : ""}
+              </p>
+            ) : null}
 
-            <div className="mt-7 flex items-center justify-between gap-3">
-              <button
-                onClick={() => setPage(page - 1)}
-                className="pop pop-white"
-                disabled={page === 0 && !intro}
-              >
-                ← Back
-              </button>
+            {/* Forward-only navigation. No Back button — once you land on a
+                question, the only way out is Next (after picking) or letting
+                the 15s timer expire. Removing the button is the simplest
+                way to guarantee you can't game the timer by leaving and
+                coming back to it. */}
+            <div className="mt-7 flex items-center justify-end gap-3">
               {page < last ? (
                 <button
-                  onClick={() => setPage(page + 1)}
+                  onClick={() => {
+                    const qid = questions[page].id;
+                    if (!lockedQuestions[qid]) {
+                      setLockedQuestions((prev) => ({ ...prev, [qid]: true }));
+                    }
+                    setPage(page + 1);
+                  }}
                   className="pop pop-coral"
-                  disabled={!picks[questions[page].id]}
+                  // Allow advancing if the question is locked (review mode
+                  // via "Look again") even without a pick — otherwise a
+                  // question whose timer expired with no answer would
+                  // strand the user.
+                  disabled={!picks[questions[page].id] && !currentLocked}
                 >
                   Next →
                 </button>
               ) : (
                 <button
-                  onClick={() => setPage(last + 1)}
+                  onClick={() => {
+                    const qid = questions[page].id;
+                    if (!lockedQuestions[qid]) {
+                      setLockedQuestions((prev) => ({ ...prev, [qid]: true }));
+                    }
+                    setPage(last + 1);
+                  }}
                   className="pop pop-grass"
-                  disabled={!picks[questions[page].id]}
+                  disabled={!picks[questions[page].id] && !currentLocked}
                 >
                   Done!
                 </button>
@@ -349,13 +488,19 @@ export function ChapterRunner({
             transition={{ duration: 0.18 }}
             className="card px-7 py-7 text-center"
           >
-            <div className="text-6xl bob">{allAnswered ? "🎯" : "🤔"}</div>
+            <div className="text-6xl bob">
+              {skippedCount > 0 ? "⏰" : "🎯"}
+            </div>
             <h2 className="font-display text-3xl md:text-4xl text-navy mt-3">
-              {allAnswered ? "Ready to send your answers?" : "Hmm — one more!"}
+              {skippedCount > 0
+                ? "Time ran out on a few — that's okay."
+                : "Ready to send your answers?"}
             </h2>
-            {!allAnswered ? (
+            {skippedCount > 0 ? (
               <p className="font-body text-lg text-navy-soft mt-3">
-                You haven&rsquo;t answered every question yet.
+                {skippedCount} question{skippedCount === 1 ? "" : "s"} closed
+                before you picked — {skippedCount === 1 ? "it counts" : "they count"}{" "}
+                as wrong. Send when ready.
               </p>
             ) : (
               <p className="font-body text-lg text-navy-soft mt-3">
@@ -369,7 +514,7 @@ export function ChapterRunner({
               <button
                 onClick={onSubmit}
                 className="pop pop-coral text-xl"
-                disabled={!allAnswered || submitting}
+                disabled={!allSettled || submitting}
               >
                 {submitting ? "Sending…" : "📨 Send it!"}
               </button>

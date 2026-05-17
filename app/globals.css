@@ -12,10 +12,18 @@
   --sun: #FFD93D;
   --sun-deep: #F4A93A;
   --cloud: #FFFFFF;
-  --grass: #7DD87D;
-  --grass-deep: #4FB04F;
-  --coral: #FF6B9D;
-  --coral-deep: #E94B7E;
+  /* Coral + grass were too light against white cards — text on those
+     bg utilities was hitting ~2:1 contrast and the colored pills/badges
+     were vanishing. Bumped toward the previous "deep" values so every
+     existing `bg-coral text-white` / `bg-grass text-white` / `text-coral`
+     auto-improves; the old light shades are preserved as `*-soft`
+     for places that explicitly want the pastel. */
+  --coral: #E94B7E;       /* was #FF6B9D */
+  --coral-deep: #C9296A;  /* was #E94B7E */
+  --coral-soft: #FF6B9D;  /* the original pastel — opt in via bg-coral-soft */
+  --grass: #4FB04F;       /* was #7DD87D */
+  --grass-deep: #2E7E2E;  /* was #4FB04F */
+  --grass-soft: #7DD87D;  /* the original pastel — opt in via bg-grass-soft */
   --berry: #B23A8E;
   --navy: #1B2A4E;
   --navy-soft: #3B4A7E;
@@ -141,4 +149,76 @@ input[type="text"]:focus, input[type="email"]:focus, input[type="datetime-local"
 @media (prefers-reduced-motion: reduce) {
   .bob, .drift-slow, .drift-mid, .drift-fast, .spin-slow { animation: none !important; }
   *, *::before, *::after { transition-duration: 0.01ms !important; }
+}
+
+/* ─── Intercom Messenger — custom outer-shell styling ──────────────────
+   The iframe interior is cross-origin (Intercom serves it from
+   intercomcdn.com) so we cannot reach the bubbles / input. The outer
+   container, however, is mounted on our domain — we can wrap the
+   open Messenger in a picture-book frame, retime the open animation,
+   and tame default Intercom chrome we do not want.
+
+   We also forcibly hide Intercom's stock launcher in case a redeploy
+   races with the JS setting hide_default_launcher: true — our
+   sun-mascot button is the only launcher we want visible. */
+
+.intercom-launcher,
+.intercom-launcher-frame,
+.intercom-lightweight-app-launcher,
+.intercom-lightweight-app-launcher-icon {
+  display: none !important;
+  visibility: hidden !important;
+}
+
+/* The open Messenger iframe — Intercom mounts it under
+   .intercom-messenger-frame. Wrap it in our picture-book frame
+   without changing Intercom's own width/height (changing those
+   pushes it off short screens). We only override what is purely
+   visual + ensure it never exceeds the viewport. */
+.intercom-messenger-frame {
+  border: 3px solid var(--navy) !important;
+  border-radius: 22px !important;
+  box-shadow:
+    6px 6px 0 var(--coral),
+    0 16px 40px rgba(27, 42, 78, 0.28) !important;
+  overflow: hidden !important;
+  animation: mia-messenger-pop 480ms cubic-bezier(0.34, 1.56, 0.64, 1) both !important;
+  /* Sit above SiteBanner but below modal dialogs / toasts if any. */
+  z-index: 2147483640 !important;
+  /* Lift it just enough to clear the 76px sun launcher + 16px gap. */
+  bottom: 96px !important;
+  right: 20px !important;
+  /* Critical: never let the Messenger extend past the viewport. The
+     iframe height is set inline by Intercom (~704px); without this
+     cap it falls off the top of short laptops. */
+  max-height: calc(100vh - 120px) !important;
+  max-width: calc(100vw - 32px) !important;
+}
+
+@keyframes mia-messenger-pop {
+  0%   { opacity: 0; transform: translateY(28px) scale(0.92); }
+  60%  { opacity: 1; transform: translateY(-4px) scale(1.01); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Mobile: thin the border and let it use the full screen width
+   (minus a sliver of margin). Height continues to cap at viewport. */
+@media (max-width: 640px) {
+  .intercom-messenger-frame {
+    border-width: 2px !important;
+    border-radius: 16px !important;
+    box-shadow:
+      4px 4px 0 var(--coral),
+      0 8px 24px rgba(27, 42, 78, 0.3) !important;
+    bottom: 90px !important;
+    right: 10px !important;
+    left: 10px !important;
+    max-width: calc(100vw - 20px) !important;
+    max-height: calc(100vh - 110px) !important;
+  }
+}
+
+/* Honor reduced-motion. */
+@media (prefers-reduced-motion: reduce) {
+  .intercom-messenger-frame { animation: none !important; }
 }
